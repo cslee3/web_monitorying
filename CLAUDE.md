@@ -34,7 +34,7 @@ cd D:/OneDrive/mysql/bin && ./mysqld --console
 ```
 GlobalMM_Realtime_Monitoring_V2_20260520.xlsb (Excel, 반드시 열려있어야 함)
   └─ win32com.client.GetObject()  ← ROT에서 직접 참조 (xw.apps 열거 우회)
-       ├─ DashboardMonitor.run()  ← 백그라운드 스레드, 0.3초 폴링 (reader_ssf.py)
+       ├─ DashboardMonitor.run()  ← 백그라운드 스레드, 1초 폴링 (reader_ssf.py)
        │    └─ _read_full() → 4개 범위 bulk read → sections 캐시 → SSE diff push
        └─ SsoMonitor.run()        ← 백그라운드 스레드, 1초 폴링 (reader_sso.py)
             └─ _read_full() → B3:M9 bulk read → rows 캐시 → SSE diff push

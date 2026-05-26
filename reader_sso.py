@@ -7,13 +7,15 @@ reader_sso.py — Option_DashBoard 탭 실시간 모니터 (SSO MM)
 - serve.py에서 import하여 사용
 """
 
-import datetime, threading, json, os, webbrowser
+import datetime, threading, json, os, webbrowser, time
 from queue import Queue
 import pythoncom
 import win32com.client
+import pywintypes
 
-from reader_common import _num
-from reader_ssf import BOOK_NAME, BASE_DIR, _colorscale_bg
+_COM_BUSY = {-2147418111, -2147417846}
+
+from common import BASE_DIR, BOOK_NAME, _num, _colorscale_bg
 
 # ── 컬럼 정의 ──────────────────────────────────────────────────────────────
 # (Excel 1-based 열 번호, 화면 헤더 텍스트, 값 포매터 함수)
@@ -228,10 +230,12 @@ class SsoMonitor:
     def run(self):
         pythoncom.CoInitialize()
         prev_data = None
+        ws        = None
 
         while True:
             try:
-                ws      = self._get_ws()
+                if ws is None:
+                    ws = self._get_ws()
                 data    = self._read_full(ws)
                 now_str = datetime.datetime.now().strftime("%H:%M:%S")
 
@@ -271,11 +275,20 @@ class SsoMonitor:
 
                 prev_data = data
 
+            except pywintypes.com_error as e:
+                hresult = e.args[0] if e.args else 0
+                if hresult in _COM_BUSY:
+                    time.sleep(0.5)
+                    continue
+                print(f"[sso_monitor] com_error: {e}")
+                prev_data = None
+                ws        = None
             except Exception as e:
                 print(f"[sso_monitor] error: {e}")
                 prev_data = None
+                ws        = None
 
-            import time; time.sleep(1.0)
+            time.sleep(1.0)
 
 
 monitor = SsoMonitor()

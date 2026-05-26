@@ -48,9 +48,9 @@
   .pnl-green { color: #1a7c34; }
   .pnl-red   { color: #cc0000; }
 
-  .dim-row td { background: #d8e6f5; }
-  .dim-row td:first-child { border-left: 3px solid #7bafd4; }
-  .dim-row:hover td { background: #fffde7 !important; }
+  /* .dim-row td { background: #d8e6f5; } */
+  /* .dim-row td:first-child { border-left: 3px solid #7bafd4; } */
+  /* .dim-row:hover td { background: #fffde7 !important; } */
 
   #status { padding: 40px; text-align: center; color: #888; font-size: 14px; }
 </style>
@@ -64,6 +64,8 @@
   <div class="item">I/R: <span id="hIr"></span></div>
   <div class="item">Expiry1: <span id="hExp1"></span></div>
   <div class="item">Expiry2: <span id="hExp2"></span></div>
+  <div class="item"><span id="hU2"></span> <span id="hV2"></span></div>
+  <div class="item"><span id="hU3"></span> <span id="hV3"></span></div>
   <div class="updated">Updated: <span id="hUpdated">-</span></div>
 </div>
 
@@ -82,18 +84,18 @@ let colOrder = [];
 let es = null;
 let wasError = false;
 
-const DIM_STOCKS = new Set([
-  "010950", // S-Oil
-  "086280", // 현대글로비스
-  "003230", // 삼양식품
-  "010060", // OCI홀딩스
-  "008770", // 호텔신라
-  "010130", // 고려아연
-  "001800", // 오리온홀딩스
-  "166090", // 하나머티리얼즈
-  "108490", // 로보티즈
-  "033780", // KT&G
-]);
+// const DIM_STOCKS = new Set([
+//   "010950", // S-Oil
+//   "086280", // 현대글로비스
+//   "003230", // 삼양식품
+//   "010060", // OCI홀딩스
+//   "008770", // 호텔신라
+//   "010130", // 고려아연
+//   "001800", // 오리온홀딩스
+//   "166090", // 하나머티리얼즈
+//   "108490", // 로보티즈
+//   "033780", // KT&G
+// ]);
 
 
 async function loadFull() {
@@ -112,7 +114,7 @@ async function loadFull() {
 
 function buildTable(d) {
   // MM sections only (main / sum1 / sum2) — idx는 ssfo_idx.html에서 표시
-  const mmSections = d.sections.filter(s => s.id !== "idx");
+  const mmSections = d.sections.filter(s => !s.raw);
   const firstSec   = mmSections[0];
 
   colOrder = firstSec.cols.map(([cidx, hdr, sub]) => ({ cidx, hdr, sub: sub || "" }));
@@ -123,6 +125,10 @@ function buildTable(d) {
   document.getElementById("hIr").textContent       = d.header.ir;
   document.getElementById("hExp1").textContent     = d.header.exp1;
   document.getElementById("hExp2").textContent     = d.header.exp2;
+  document.getElementById("hU2").textContent       = d.header.u2;
+  document.getElementById("hV2").textContent       = d.header.v2;
+  document.getElementById("hU3").textContent       = d.header.u3;
+  document.getElementById("hV3").textContent       = d.header.v3;
   document.getElementById("hUpdated").textContent  = d.updated;
 
   const tw = document.getElementById("tableWrap");
@@ -144,8 +150,8 @@ function buildTable(d) {
         continue;
       }
       const row   = sec.rows[ri];
-      const isDim = DIM_STOCKS.has(row["0"]?.v || "");
-      html += `<tr class="${meta.total ? "total-row" : ""} ${isDim ? "dim-row" : ""}">`;
+      // const isDim = DIM_STOCKS.has(row["0"]?.v || "");
+      html += `<tr class="${meta.total ? "total-row" : ""}">`;
       for (const { cidx } of colOrder) {
         const cell = row[String(cidx)] || { v: "", color: "" };
         html += makeTd(sec.id, ri, cidx, cell);
@@ -226,7 +232,7 @@ function applyChanges(cells, updated) {
     const cidx = Number(parts[2]);
 
     // ssfo_pnl.html은 MM 섹션만 처리
-    if (sid === "idx") continue;
+    if (sid.startsWith("idx")) continue;
 
     const td = document.getElementById(`c-${sid}-${ri}-${cidx}`);
     if (!td) continue;

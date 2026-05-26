@@ -136,6 +136,9 @@ async function loadFull() {
     buildTable(d);
     buildButtons(d);
     connectStream();
+    // 첫 번째 종목 자동 선택
+    const firstCode = (d.rows[0]?.["0"] || {}).v;
+    if (firstCode) selectStock(firstCode);
   } catch(e) {
     document.getElementById("status").textContent = "서버 연결 실패, 재시도 중...";
     setTimeout(loadFull, 2000);

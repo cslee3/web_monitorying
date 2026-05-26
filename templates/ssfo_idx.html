@@ -40,7 +40,7 @@
     background: #202123; color: #fff; padding: 4px 7px;
     font-size: 11px; text-align: center; border: 1px solid #444;
   }
-  td { padding: 2px 6px; border: 1px solid #e0e0e0; }
+  td { padding: 2px 6px; border: 1px solid #e0e0e0; text-align: right; }
   tr:hover td { background: #fffde7 !important; }
   .total-row td { background: #e2efda !important; font-weight: bold; }
 
@@ -65,6 +65,8 @@
   <div class="item">I/R: <span id="hIr"></span></div>
   <div class="item">Expiry1: <span id="hExp1"></span></div>
   <div class="item">Expiry2: <span id="hExp2"></span></div>
+  <div class="item"><span id="hU2"></span> <span id="hV2"></span></div>
+  <div class="item"><span id="hU3"></span> <span id="hV3"></span></div>
   <div class="updated">Updated: <span id="hUpdated">-</span></div>
 </div>
 
@@ -73,11 +75,6 @@
 <div class="tables-wrap" id="tablesWrap" style="display:none"></div>
 
 <script>
-// 새 섹션을 시작하는 IdxCode 마커 (cidx 0 값 기준)
-const SECTION_STARTERS = new Set(["Q150 Roll", "K2G01P", "091160", "Udly", "IndexCode"]);
-
-let colOrder = [];
-let numCidx  = new Set();
 let es = null;
 let wasError = false;
 
@@ -95,95 +92,48 @@ async function loadFull() {
   }
 }
 
-function buildGroups(rows, rowMeta) {
-  const groups = [];
-  let current = [];
-  let seenIndexCode = false;
-
-  for (let i = 0; i < rows.length; i++) {
-    if (rowMeta[i].sep) continue;
-
-    // cidx 0 = IdxCode, cidx 1 = IdxName
-    const idxCode = (rows[i]["0"]?.v || "").trim();
-    const idxName = (rows[i]["1"]?.v || "").trim();
-
-    if (idxCode === "IndexCode") seenIndexCode = true;
-
-    const isTotal      = idxCode === "합계" || idxName === "합계";
-    const isTrigger    = SECTION_STARTERS.has(idxCode) &&
-                         !(seenIndexCode && idxCode === "K2G01P");
-    const isNewSection = isTrigger && current.length > 0;
-
-    if (isTotal) {
-      current.push(i);
-      groups.push([...current]);
-      current = [];
-    } else if (isNewSection) {
-      groups.push([...current]);
-      current = [i];
-    } else {
-      current.push(i);
-    }
-  }
-
-  if (current.length > 0) groups.push([...current]);
-  return groups;
-}
-
 function buildTables(d) {
-  const idxSec = d.sections.find(s => s.id === "idx");
-
-  colOrder = idxSec.cols.map(([cidx, hdr]) => ({ cidx, hdr }));
-  numCidx  = new Set(idxSec.num_cidx);
-
   document.getElementById("hBaseDate").textContent = d.header.base_date;
   document.getElementById("hYtd").textContent      = d.header.ytd;
   document.getElementById("hIr").textContent       = d.header.ir;
   document.getElementById("hExp1").textContent     = d.header.exp1;
   document.getElementById("hExp2").textContent     = d.header.exp2;
+  document.getElementById("hU2").textContent       = d.header.u2;
+  document.getElementById("hV2").textContent       = d.header.v2;
+  document.getElementById("hU3").textContent       = d.header.u3;
+  document.getElementById("hV3").textContent       = d.header.v3;
   document.getElementById("hUpdated").textContent  = d.updated;
 
-  const groups = buildGroups(idxSec.rows, idxSec.row_meta);
-  const thead  = "<tr>" + colOrder.map(c => `<th>${c.hdr}</th>`).join("") + "</tr>";
-
-  const filledGroups = [];
-  for (const group of groups) {
-    let tbody = "";
-    for (const ri of group) {
-      const meta = idxSec.row_meta[ri];
-      if (meta.sep) continue;
-      const row = idxSec.rows[ri];
-      tbody += `<tr class="${meta.total ? "total-row" : ""}">`;
-      for (const { cidx } of colOrder) {
-        const cell = row[String(cidx)] || { v: "", color: "" };
-        tbody += makeTd(ri, cidx, cell);
-      }
-      tbody += "</tr>";
-    }
-    if (tbody) filledGroups.push(tbody);
-  }
-
+  const idxSections = d.sections.filter(s => s.raw);
   let html = "";
-  for (let gi = 0; gi < filledGroups.length; gi++) {
-    const isFirstOrLast = gi === 0 || gi === filledGroups.length - 1;
-    const theadHtml = isFirstOrLast ? `<thead>${thead}</thead>` : "";
-    html += `<div class="table-section">
-      <table>${theadHtml}<tbody>${filledGroups[gi]}</tbody></table>
-    </div>`;
+
+  for (const sec of idxSections) {
+    const rows = sec.rows;
+    if (!rows.length) continue;
+
+    let theadHtml = "";
+    let startRow  = 0;
+    if (sec.has_header) {
+      theadHtml = "<thead><tr>" + rows[0].map(v => `<th>${v}</th>`).join("") + "</tr></thead>";
+      startRow  = 1;
+    } else if (sec.header) {
+      theadHtml = "<thead><tr>" + sec.header.map(v => `<th>${v}</th>`).join("") + "</tr></thead>";
+    }
+
+    let tbody = "";
+    for (let ri = startRow; ri < rows.length; ri++) {
+      tbody += "<tr>" + rows[ri].map((v, ci) =>
+        `<td id="c-${sec.id}-${ri}-${ci}">${v}</td>`
+      ).join("") + "</tr>";
+    }
+
+    html += `<div class="table-section"><table>${theadHtml}<tbody>${tbody}</tbody></table></div>`;
   }
 
   document.getElementById("tablesWrap").innerHTML = html;
   document.getElementById("status").style.display     = "none";
   document.getElementById("infoBar").style.display    = "flex";
   document.getElementById("tablesWrap").style.display = "flex";
-}
-
-function makeTd(ri, cidx, cell) {
-  const styles = [];
-  styles.push(`text-align:${numCidx.has(cidx) ? "right" : "left"}`);
-  const colorCls = cell.color === "green" ? "pnl-green"
-                 : cell.color === "red"   ? "pnl-red" : "";
-  return `<td id="c-idx-${ri}-${cidx}" class="${colorCls}" style="${styles.join(";")}">${cell.v}</td>`;
 }
 
 function connectStream() {
@@ -214,23 +164,18 @@ function connectStream() {
 function applyChanges(cells, updated) {
   document.getElementById("hUpdated").textContent = updated;
 
-  for (const { key, v, color } of cells) {
+  for (const { key, v } of cells) {
+    // raw 섹션 key: "idx1_2_3" (sid_ri_ci)
+    if (!key.startsWith("idx")) continue;
     const parts = key.split("_");
-    const sid  = parts[0];
-    const ri   = parts[1];
-    const cidx = Number(parts[2]);
+    const sid = parts[0];
+    const ri  = parts[1];
+    const ci  = parts[2];
 
-    // ssfo_idx.html은 idx 섹션만 처리
-    if (sid !== "idx") continue;
-
-    const td = document.getElementById(`c-idx-${ri}-${cidx}`);
+    const td = document.getElementById(`c-${sid}-${ri}-${ci}`);
     if (!td) continue;
 
     td.textContent = v;
-    td.classList.remove("pnl-green", "pnl-red");
-    if (color === "green") td.classList.add("pnl-green");
-    else if (color === "red") td.classList.add("pnl-red");
-
     td.classList.remove("flash");
     void td.offsetWidth;
     td.classList.add("flash");

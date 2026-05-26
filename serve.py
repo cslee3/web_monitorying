@@ -84,6 +84,20 @@ def api_sso_stream():
     return _sse_response(reader_sso.monitor)
 
 
+# ── DB 저장 토글 ─────────────────────────────────────────────────────────────
+
+@app.route("/api/db-save", methods=["GET"])
+def api_db_save_status():
+    return jsonify({"db_save": reader_ssf.monitor.db_save_enabled})
+
+
+@app.route("/api/db-save", methods=["POST"])
+def api_db_save_toggle():
+    enabled = reader_ssf.monitor.toggle_db_save()
+    print(f"[serve] db_save {'ON' if enabled else 'OFF'}")
+    return jsonify({"db_save": enabled})
+
+
 # ── 정적 파일 ─────────────────────────────────────────────────────────────
 
 @app.route("/<path:filename>")
@@ -104,6 +118,9 @@ def start():
     Spyder 등 IPython 환경에서도 직접 호출 가능.
     use_reloader=False: Werkzeug 자동 리로더 비활성화 (Spyder 크래시 방지).
     """
+    import logging
+    logging.getLogger("werkzeug").setLevel(logging.ERROR)  # GET 로그 억제
+
     threading.Thread(target=reader_ssf.monitor.run, daemon=True).start()
     threading.Thread(target=reader_sso.monitor.run, daemon=True).start()
     print("[serve] http://0.0.0.0:8080")
@@ -111,4 +128,8 @@ def start():
 
 
 if __name__ == "__main__":
+    import sys
+    if "save" in sys.argv[1:]:
+        reader_ssf.monitor.db_save_enabled = True
+        print("[serve] db_save ON")
     start()
