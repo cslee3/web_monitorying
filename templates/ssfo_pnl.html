@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"/>
+<title>SSF MM Dashboard</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', sans-serif; font-size: 12px; background: #fff; }
+
+  .info-bar {
+    display: flex; align-items: center; gap: 20px;
+    padding: 5px 10px; background: #eef2f6; border-bottom: 1px solid #d0d8e0;
+    position: sticky; top: 0; z-index: 10; flex-wrap: wrap;
+  }
+  .info-bar .item { font-size: 11px; }
+  .info-bar .item span { font-weight: bold; }
+  .updated { color: #222; font-size: 14px; font-weight: bold; }
+
+  .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #ccc; display: inline-block; margin-right: 6px;
+    transition: background 0.2s;
+  }
+  .dot.live { background: #2ecc71; }
+  .dot.error { background: #e74c3c; }
+
+  .table-wrap { overflow: auto; height: calc(100vh - 30px); }
+
+  table { border-collapse: collapse; white-space: nowrap; }
+  thead th {
+    background: #202123; color: #fff; padding: 4px 7px;
+    position: sticky; top: 0; z-index: 5;
+    font-size: 11px; text-align: center; border: 1px solid #444;
+    vertical-align: bottom;
+  }
+  .th-sub { display: block; font-weight: normal; font-size: 9px; opacity: 0.65; margin-top: 2px; }
+  td { padding: 2px 6px; border: 1px solid #e0e0e0; }
+  tr:hover td { background: #fffde7 !important; }
+  .total-row td { background: #e2efda !important; font-weight: bold; }
+  .sep-row td { background: #f0f0f0; height: 5px; padding: 0; border: none; }
+
+  @keyframes flash {
+    0%   { background-color: #fff176; }
+    100% { background-color: transparent; }
+  }
+  .flash { animation: flash 0.8s ease-out; }
+
+  .pnl-green { color: #1a7c34; }
+  .pnl-red   { color: #cc0000; }
+
+  .dim-row td { background: #d8e6f5; }
+  .dim-row td:first-child { border-left: 3px solid #7bafd4; }
+  .dim-row:hover td { background: #fffde7 !important; }
+
+  #status { padding: 40px; text-align: center; color: #888; font-size: 14px; }
+</style>
+</head>
+<body>
+
+<div class="info-bar" id="infoBar" style="display:none">
+  <span class="dot" id="liveDot"></span>
+  <div class="item">BaseDate: <span id="hBaseDate"></span></div>
+  <div class="item">Ytd: <span id="hYtd"></span></div>
+  <div class="item">I/R: <span id="hIr"></span></div>
+  <div class="item">Expiry1: <span id="hExp1"></span></div>
+  <div class="item">Expiry2: <span id="hExp2"></span></div>
+  <div class="updated">Updated: <span id="hUpdated">-</span></div>
+</div>
+
+<div id="status">데이터 로딩 중...</div>
+
+<div class="table-wrap" id="tableWrap" style="display:none">
+  <table>
+    <thead id="thead"></thead>
+    <tbody id="tbody"></tbody>
+  </table>
+</div>
+
+<script>
+let numCidx = new Set();
+let colOrder = [];
+let es = null;
+let wasError = false;
+
+const DIM_STOCKS = new Set([
+  "010950", // S-Oil
+  "086280", // 현대글로비스
+  "003230", // 삼양식품
+  "010060", // OCI홀딩스
+  "008770", // 호텔신라
+  "010130", // 고려아연
+  "001800", // 오리온홀딩스
+  "166090", // 하나머티리얼즈
+  "108490", // 로보티즈
+  "033780", // KT&G
+]);
+
+
+async function loadFull() {
+  try {
+    const res = await fetch("/api/dashboard");
+    if (!res.ok) { setTimeout(loadFull, 2000); return; }
+    const d = await res.json();
+    if (d.error) { setTimeout(loadFull, 2000); return; }
+    buildTable(d);
+    connectStream();
+  } catch(e) {
+    document.getElementById("status").textContent = "서버 연결 실패, 재시도 중...";
+    setTimeout(loadFull, 2000);
+  }
+}
+
+function buildTable(d) {
+  // MM sections only (main / sum1 / sum2) — idx는 ssfo_idx.html에서 표시
+  const mmSections = d.sections.filter(s => s.id !== "idx");
+  const firstSec   = mmSections[0];
+
+  colOrder = firstSec.cols.map(([cidx, hdr, sub]) => ({ cidx, hdr, sub: sub || "" }));
+  numCidx  = new Set(firstSec.num_cidx);
+
+  document.getElementById("hBaseDate").textContent = d.header.base_date;
+  document.getElementById("hYtd").textContent      = d.header.ytd;
+  document.getElementById("hIr").textContent       = d.header.ir;
+  document.getElementById("hExp1").textContent     = d.header.exp1;
+  document.getElementById("hExp2").textContent     = d.header.exp2;
+  document.getElementById("hUpdated").textContent  = d.updated;
+
+  const tw = document.getElementById("tableWrap");
+  const savedLeft = tw ? tw.scrollLeft : 0;
+  const savedTop  = tw ? tw.scrollTop  : 0;
+
+  document.getElementById("thead").innerHTML =
+    "<tr>" + colOrder.map(c =>
+      `<th>${c.hdr}${c.sub ? `<span class="th-sub">${c.sub}</span>` : ""}</th>`
+    ).join("") + "</tr>";
+
+  let html = "";
+  for (let si = 0; si < mmSections.length; si++) {
+    const sec = mmSections[si];
+    for (let ri = 0; ri < sec.rows.length; ri++) {
+      const meta = sec.row_meta[ri];
+      if (meta.sep) {
+        html += `<tr class="sep-row"><td colspan="${colOrder.length}"></td></tr>`;
+        continue;
+      }
+      const row   = sec.rows[ri];
+      const isDim = DIM_STOCKS.has(row["0"]?.v || "");
+      html += `<tr class="${meta.total ? "total-row" : ""} ${isDim ? "dim-row" : ""}">`;
+      for (const { cidx } of colOrder) {
+        const cell = row[String(cidx)] || { v: "", color: "" };
+        html += makeTd(sec.id, ri, cidx, cell);
+      }
+      html += "</tr>";
+    }
+    // 섹션 간 구분선 (마지막 섹션 제외)
+    if (si < mmSections.length - 1) {
+      html += `<tr class="sep-row"><td colspan="${colOrder.length}"></td></tr>`;
+    }
+  }
+
+  document.getElementById("tbody").innerHTML = html;
+
+  document.getElementById("status").style.display    = "none";
+  document.getElementById("infoBar").style.display   = "flex";
+  document.getElementById("tableWrap").style.display = "block";
+
+  if (tw) { tw.scrollLeft = savedLeft; tw.scrollTop = savedTop; }
+}
+
+// F=4, Q=15, R=16, AA=25 — ColorScale 그라디언트 적용 컬럼
+const CS_CIDX = new Set([4, 15, 16, 25]);
+
+function makeTd(sid, ri, cidx, cell) {
+  const styles = [];
+  styles.push(`text-align:${numCidx.has(cidx) ? "right" : "left"}`);
+
+  // ColorScale 배경 (F/Q/R/AA열)
+  if (CS_CIDX.has(cidx) && cell.bg) {
+    styles.push(`background:${cell.bg}`);
+  }
+
+  // MM Spread Alert (cidx 10 = "MM Spread")
+  if (cidx === 10 && cell.v === "Alert") {
+    styles.push("background:#ffff00");
+    styles.push("color:#cc0000");
+    styles.push("font-weight:bold");
+  }
+
+  const colorCls = cell.color === "green" ? "pnl-green"
+                 : cell.color === "red"   ? "pnl-red" : "";
+  return `<td id="c-${sid}-${ri}-${cidx}" class="${colorCls}" style="${styles.join(";")}">${cell.v}</td>`;
+}
+
+function connectStream() {
+  if (es) es.close();
+  es = new EventSource("/api/stream");
+
+  es.onopen = () => {
+    document.getElementById("liveDot").className = "dot";
+    if (wasError) {
+      wasError = false;
+      fetch("/api/dashboard").then(r => r.ok ? r.json() : null)
+        .then(d => { if (d && !d.error) buildTable(d); }).catch(() => {});
+    }
+  };
+
+  es.onmessage = (e) => {
+    const d = JSON.parse(e.data);
+    if (d.type === "connected") return;
+    applyChanges(d.cells, d.updated);
+  };
+
+  es.onerror = () => {
+    document.getElementById("liveDot").className = "dot error";
+    wasError = true;
+  };
+}
+
+function applyChanges(cells, updated) {
+  document.getElementById("hUpdated").textContent = updated;
+
+  for (const { key, v, color, bg } of cells) {
+    const parts = key.split("_");
+    const sid  = parts[0];
+    const ri   = parts[1];
+    const cidx = Number(parts[2]);
+
+    // ssfo_pnl.html은 MM 섹션만 처리
+    if (sid === "idx") continue;
+
+    const td = document.getElementById(`c-${sid}-${ri}-${cidx}`);
+    if (!td) continue;
+
+    td.textContent = v;
+
+    // ColorScale 배경 실시간 갱신
+    if (CS_CIDX.has(cidx)) {
+      td.style.background = bg || "";
+    }
+
+    // MM Spread Alert 실시간 적용/해제
+    if (cidx === 10) {
+      if (v === "Alert") {
+        td.style.background = "#ffff00";
+        td.style.color      = "#cc0000";
+        td.style.fontWeight = "bold";
+      } else {
+        td.style.background = "";
+        td.style.color      = "";
+        td.style.fontWeight = "";
+      }
+    }
+
+    td.classList.remove("pnl-green", "pnl-red");
+    if (color === "green") td.classList.add("pnl-green");
+    else if (color === "red") td.classList.add("pnl-red");
+
+    td.classList.remove("flash");
+    void td.offsetWidth;
+    td.classList.add("flash");
+    td.addEventListener("animationend", () => td.classList.remove("flash"), { once: true });
+  }
+
+  const dot = document.getElementById("liveDot");
+  dot.classList.add("live");
+  setTimeout(() => dot.classList.remove("live"), 300);
+}
+
+loadFull();
+</script>
+</body>
+</html>

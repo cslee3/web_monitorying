@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+                    <html>
+                    <head>
+                      <meta charset="utf-8">
+                      <title>DashBoard</title>
+                      
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --pos: #3fb950;
+    --neg: #f85149;
+    --accent: #58a6ff;
+    --header-bg: #1f2937;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Consolas', monospace; background: var(--bg); color: var(--text); font-size: 12px; padding: 12px; }
+  h1 { font-size: 16px; color: var(--accent); margin-bottom: 12px; }
+  h2 { font-size: 13px; color: var(--accent); margin: 16px 0 6px; border-bottom: 1px solid var(--border); padding-bottom: 4px; }
+  h3 { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+  .tabs { display: flex; gap: 4px; margin-bottom: 12px; flex-wrap: wrap; }
+  .tab { padding: 4px 12px; border: 1px solid var(--border); border-radius: 4px; cursor: pointer; color: var(--muted); background: var(--surface); }
+  .tab.active { border-color: var(--accent); color: var(--accent); }
+  .panel { display: none; }
+  .panel.active { display: block; }
+  .table-box { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 10px; margin-bottom: 12px; }
+  .scroll-x { overflow-x: auto; }
+  table { border-collapse: collapse; white-space: nowrap; }
+  th { background: var(--header-bg); color: var(--muted); padding: 4px 8px; text-align: right; border-bottom: 1px solid var(--border); position: sticky; top: 0; }
+  th:first-child { text-align: left; }
+  td { padding: 3px 8px; text-align: right; border-bottom: 1px solid var(--border); }
+  td:first-child { text-align: left; }
+  tr:hover td { background: #1f2937; }
+  .pos { color: var(--pos); }
+  .neg { color: var(--neg); }
+  .empty { color: var(--muted); font-style: italic; padding: 8px; }
+  #last-updated { font-size: 10px; color: var(--muted); margin-bottom: 8px; }
+</style>
+
+                    </head>
+                    <body>
+                      <h1>DashBoard</h1>
+                      
+    <div class="table-box">
+        <h3>DashBoard</h3>
+        <div class="scroll-x">
+        <table>
+            <thead><tr><th>Type</th><th>Stock</th><th>StockName</th><th>LastPrice</th><th>Change(%)</th><th>Volume(Lots)</th><th>Volume(Mil)</th><th>MTM_PnL</th><th>Theo_PnL</th></tr></thead>
+            <tbody><tr><td class="">GT</td><td class="">000150</td><td class="">두산</td><td class="">1596000.0</td><td class="">1.53%</td><td class="">1191.0</td><td class="">8379.73</td><td class="pos">214,379,500</td><td class="pos">2,038,844</td></tr><tr><td class="">FF</td><td class="">326030</td><td class="">SK바이오팜</td><td class="">99900.0</td><td class="">-1.87%</td><td class="">165.0</td><td class="">165.559</td><td class="pos">243,000</td><td class="pos">211,475</td></tr><tr><td class="">B2</td><td class="">010950</td><td class="">S-Oil</td><td class="">134500.0</td><td class="">0.15%</td><td class="">1469.0</td><td class="">1978.073</td><td class="neg">-1,911,750</td><td class="pos">1,031,975</td></tr><tr><td class="">1S</td><td class="">298040</td><td class="">효성중공업</td><td class="">3912000.0</td><td class="">-1.76%</td><td class="">354.0</td><td class="">14040.62</td><td class="neg">-2,150,000</td><td class="neg">-223,628</td></tr><tr><td class="">CC</td><td class="">086280</td><td class="">현대글로비스</td><td class="">227000.0</td><td class="">-4.82%</td><td class="">410.0</td><td class="">945.05</td><td class="pos">1,366,000</td><td class="pos">124,013</td></tr><tr><td class="">DY</td><td class="">017800</td><td class="">현대엘리베이터</td><td class="">98700.0</td><td class="">-0.3%</td><td class="">673.0</td><td class="">664.985</td><td class="pos">435,400</td><td class="neg">-37,364</td></tr><tr><td class="">0K</td><td class="">003230</td><td class="">삼양식품</td><td class="">1341000.0</td><td class="">2.05%</td><td class="">275.0</td><td class="">3707.41</td><td class="neg">-15,260,000</td><td class="pos">2,530,195</td></tr><tr><td class="">C3</td><td class="">011780</td><td class="">금호석유화학</td><td class="">146600.0</td><td class="">-2.4%</td><td class="">128.0</td><td class="">185.145</td><td class="pos">420,900</td><td class="pos">182,927</td></tr><tr><td class="">C0</td><td class="">010060</td><td class="">OCI홀딩스</td><td class="">368000.0</td><td class="">-0.94%</td><td class="">514.0</td><td class="">1899.945</td><td class="neg">-770,000</td><td class="neg">-27,664</td></tr><tr><td class="">BQ</td><td class="">008770</td><td class="">호텔신라</td><td class="">65500.0</td><td class="">-3.25%</td><td class="">2708.0</td><td class="">1770.447</td><td class="neg">-89,950</td><td class="pos">961,091</td></tr><tr><td class="">HP</td><td class="">084370</td><td class="">유진테크</td><td class="">130000.0</td><td class="">-7.14%</td><td class="">580.0</td><td class="">750.014</td><td class="pos">923,900</td><td class="pos">411,199</td></tr><tr><td class="">B3</td><td class="">010130</td><td class="">고려아연</td><td class="">1579000.0</td><td class="">-1.56%</td><td class="">327.0</td><td class="">5106.76</td><td class="pos">31,016,000</td><td class="pos">7,737,122</td></tr><tr><td class="">1M</td><td class="">183300</td><td class="">코미코</td><td class="">141600.0</td><td class="">-0.56%</td><td class="">293.0</td><td class="">425.61</td><td class="neg">-176,300</td><td class="neg">-13,414</td></tr><tr><td class="">GP</td><td class="">073240</td><td class="">금호타이어</td><td class="">5820.0</td><td class="">-4.28%</td><td class="">1902.0</td><td class="">111.1519</td><td class="neg">-21,500</td><td class="neg">-21,500</td></tr><tr><td class="">0R</td><td class="">001800</td><td class="">오리온홀딩스</td><td class="">25850.0</td><td class="">2.17%</td><td class="">856.0</td><td class="">220.3335</td><td class="neg">-178,475</td><td class="neg">-299,121</td></tr><tr><td class="">HV</td><td class="">166090</td><td class="">하나머티리얼즈</td><td class="">75500.0</td><td class="">-5.15%</td><td class="">256.0</td><td class="">195.704</td><td class="pos">349,800</td><td class="pos">395,596</td></tr><tr><td class="">2C</td><td class="">025900</td><td class="">동화기업</td><td class="">11600.0</td><td class="">-4.68%</td><td class="">359.0</td><td class="">41.7056</td><td class="pos">38,620</td><td class="pos">30,056</td></tr><tr><td class="">DG</td><td class="">111770</td><td class="">영원무역</td><td class="">82900.0</td><td class="">-1.54%</td><td class="">369.0</td><td class="">304.604</td><td class="pos">1,109,600</td><td class="pos">403,934</td></tr><tr><td class="">HH</td><td class="">298020</td><td class="">효성티앤씨</td><td class="">518000.0</td><td class="">-2.81%</td><td class="">21.0</td><td class="">108.77</td><td class="neg">-400,000</td><td class="pos">107,850</td></tr><tr><td class="">2E</td><td class="">222080</td><td class="">씨아이에스</td><td class="">17170.0</td><td class="">-7.94%</td><td class="">1946.0</td><td class="">335.8233</td><td class="pos">546,820</td><td class="pos">286,550</td></tr><tr><td class="">0P</td><td class="">009970</td><td class="">영원무역홀딩스</td><td class="">208000.0</td><td class="">-1.89%</td><td class="">76.0</td><td class="">158.115</td><td class="pos">458,500</td><td class="neg">-151,496</td></tr><tr><td class="">2X</td><td class="">108490</td><td class="">로보티즈</td><td class="">316500.0</td><td class="">-3.65%</td><td class="">99.0</td><td class="">328.945</td><td class="pos">30,000</td><td class="pos">250,678</td></tr><tr><td class="">3A</td><td class="">065350</td><td class="">신성델타테크</td><td class="">58000.0</td><td class="">-1.02%</td><td class="">1.0</td><td class="">0.581</td><td class="pos">5,000</td><td class="pos">571</td></tr><tr><td class="">2N</td><td class="">002030</td><td class="">아세아</td><td class="">271000.0</td><td class="">1.5%</td><td class="">289.0</td><td class="">770.95</td><td class="pos">4,235,000</td><td class="pos">1,453,065</td></tr><tr><td class="">12</td><td class="">017670</td><td class="">SK텔레콤</td><td class="">95100.0</td><td class="">-0.52%</td><td class="">1980.0</td><td class="">1899.942</td><td class="neg">-14,833,800</td><td class="pos">498,170</td></tr><tr><td class="">36</td><td class="">033780</td><td class="">KT&G</td><td class="">178300.0</td><td class="">1.02%</td><td class="">404.0</td><td class="">721.031</td><td class="neg">-96,300</td><td class="neg">-143,370</td></tr><tr><td class="">FA</td><td class="">011200</td><td class="">HMM</td><td class="">20500.0</td><td class="">-1.2%</td><td class="">839.0</td><td class="">170.913</td><td class="pos">605,650</td><td class="pos">709,223</td></tr><tr><td class="">CN</td><td class="">022100</td><td class="">포스코DX</td><td class="">34900.0</td><td class="">-3.99%</td><td class="">2371.0</td><td class="">826.1855</td><td class="neg">-4,530,100</td><td class="neg">-2,426,149</td></tr><tr><td class="">CT</td><td class="">000810</td><td class="">삼성화재</td><td class="">461000.0</td><td class="">-0.65%</td><td class="">109.0</td><td class="">506.175</td><td class="neg">-570,000</td><td class="pos">342,442</td></tr><tr><td class="">M8</td><td class="">396500</td><td class="">TIGER반도체</td><td class="">40115.0</td><td class="">-0.59%</td><td class="">1.0</td><td class="">4.0575</td><td class="pos">17,500</td><td class="pos">16,699</td></tr><tr><td class=""></td><td class="">합계</td><td class=""></td><td class=""></td><td class=""></td><td class=""></td><td class="">46724.335300000006</td><td class="pos">215,193,015</td><td class="pos">16,379,967</td></tr></tbody>
+        </table>
+        </div>
+    </div>
+    
+                    </body>
+                    </html>

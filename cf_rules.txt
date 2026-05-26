@@ -1,0 +1,344 @@
+
+============================================================
+  DashBoard
+============================================================
+
+[1] 범위: $AD$30:$AD$36  /  타입: Expression
+     수식: =AD30 < 0
+     글꼴: color=rgb(255,0,0)  bold=None  italic=None
+     배경 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+     테두리 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+
+[2] 범위: $M$43  /  타입: Expression
+     수식: =M43 < 0
+     글꼴: color=rgb(255,0,0)  bold=None  italic=None
+     배경 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+     테두리 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+
+[3] 범위: $M$42  /  타입: Expression
+     수식: =M42 < 0
+     글꼴: color=rgb(255,0,0)  bold=None  italic=None
+     배경 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+     테두리 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+
+[4] 범위: $AH$30:$AH$36  /  타입: ColorScale
+     ColorScale[1]: type=1  val=-5183539.240445703  color=rgb(90,138,198)
+     ColorScale[2]: type=5  val=50.0  color=rgb(252,252,255)
+     ColorScale[3]: type=2  val=3953505.9082092196  color=rgb(248,105,107)
+
+[5] 범위: $Y$43  /  타입: Expression
+     수식: =Y43 > 0
+     글꼴: color=rgb(255,0,0)  bold=True  italic=False
+     배경 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+     테두리 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+
+[6] 범위: $X$43  /  타입: Expression
+     수식: =X43 > 0
+     글꼴: color=rgb(255,0,0)  bold=True  italic=False
+     배경 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+     테두리 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+
+[7] 범위: $V$43  /  타입: Expression
+     수식: =V43 > 0
+     글꼴: color=rgb(255,0,0)  bold=True  italic=False
+     배경 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+     테두리 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+
+[8] 범위: $U$43  /  타입: Expression
+     수식: =U43 > 0
+     글꼴: color=rgb(255,0,0)  bold=True  italic=False
+     배경 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+     테두리 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+
+[9] 범위: $G$43:$L$43  /  타입: Expression
+     수식: =G43 < 0
+     글꼴: color=rgb(255,0,0)  bold=None  italic=None
+     배경 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+     테두리 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+
+[10] 범위: $Q$43  /  타입: ColorScale
+     ColorScale[1]: type=1  val=0.0  color=rgb(90,138,198)
+     ColorScale[2]: type=5  val=50.0  color=rgb(252,252,255)
+     ColorScale[3]: type=2  val=0.0  color=rgb(248,105,107)
+
+[11] 범위: $AA$43  /  타입: ColorScale
+     ColorScale[1]: type=1  val=4981910.958907441  color=rgb(90,138,198)
+     ColorScale[2]: type=5  val=50.0  color=rgb(252,252,255)
+     ColorScale[3]: type=2  val=4981910.958907441  color=rgb(248,105,107)
+
+[12] 범위: $Y$42  /  타입: Expression
+     수식: =Y42 > 0
+     글꼴: color=rgb(255,0,0)  bold=True  italic=False
+     배경 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+     테두리 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+
+[13] 범위: $X$42  /  타입: Expression
+     수식: =X42 > 0
+     글꼴: color=rgb(255,0,0)  bold=True  italic=False
+     배경 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+     테두리 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+
+[14] 범위: $V$42  /  타입: Expression
+     수식: =V42 > 0
+     글꼴: color=rgb(255,0,0)  bold=True  italic=False
+     배경 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+     테두리 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+
+[15] 범위: $U$42  /  타입: Expression
+     수식: =U42 > 0
+     글꼴: color=rgb(255,0,0)  bold=True  italic=False
+     배경 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+     테두리 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+
+[16] 범위: $G$42:$L$42  /  타입: Expression
+     수식: =G42 < 0
+     글꼴: color=rgb(255,0,0)  bold=None  italic=None
+     배경 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+     테두리 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+
+[17] 범위: $Q$42  /  타입: ColorScale
+     ColorScale[1]: type=1  val=298.0  color=rgb(90,138,198)
+     ColorScale[2]: type=5  val=50.0  color=rgb(252,252,255)
+     ColorScale[3]: type=2  val=298.0  color=rgb(248,105,107)
+
+[18] 범위: $AA$42  /  타입: ColorScale
+     ColorScale[1]: type=1  val=368459.31506909407  color=rgb(90,138,198)
+     ColorScale[2]: type=5  val=50.0  color=rgb(252,252,255)
+     ColorScale[3]: type=2  val=368459.31506909407  color=rgb(248,105,107)
+
+[19] 범위: $G$6:$G$34  /  타입: Expression
+     수식: =$G6<0
+     글꼴: color=rgb(255,0,0)  bold=None  italic=None
+     배경: (없음)
+     테두리 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+
+[20] 범위: $L$6:$L$35  /  타입: Expression
+     수식: =$L6="Alert"
+     글꼴: color=rgb(255,0,0)  bold=None  italic=None
+     배경 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+     테두리 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+
+[21] 범위: $M$6:$M$34  /  타입: Expression
+     수식: =M6 < 0
+     글꼴: color=rgb(255,0,0)  bold=None  italic=None
+     배경 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+     테두리 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+
+[22] 범위: $Y$39  /  타입: Expression
+     수식: =Y39 > 0
+     글꼴: color=rgb(255,0,0)  bold=True  italic=False
+     배경 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+     테두리 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+
+[23] 범위: $X$39  /  타입: Expression
+     수식: =X39 > 0
+     글꼴: color=rgb(255,0,0)  bold=True  italic=False
+     배경 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+     테두리 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+
+[24] 범위: $V$39  /  타입: Expression
+     수식: =V39 > 0
+     글꼴: color=rgb(255,0,0)  bold=True  italic=False
+     배경 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+     테두리 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+
+[25] 범위: $U$39  /  타입: Expression
+     수식: =U39 > 0
+     글꼴: color=rgb(255,0,0)  bold=True  italic=False
+     배경 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+     테두리 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+
+[26] 범위: $G$39:$L$39  /  타입: Expression
+     수식: =G39 < 0
+     글꼴: color=rgb(255,0,0)  bold=None  italic=None
+     배경 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+     테두리 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+
+[27] 범위: $Q$39  /  타입: ColorScale
+     ColorScale[1]: type=1  val=0.0  color=rgb(90,138,198)
+     ColorScale[2]: type=5  val=50.0  color=rgb(252,252,255)
+     ColorScale[3]: type=2  val=0.0  color=rgb(248,105,107)
+
+[28] 범위: $AA$39  /  타입: ColorScale
+     ColorScale[1]: type=1  val=5.878973752260208e-07  color=rgb(90,138,198)
+     ColorScale[2]: type=5  val=50.0  color=rgb(252,252,255)
+     ColorScale[3]: type=2  val=5.878973752260208e-07  color=rgb(248,105,107)
+
+[29] 범위: $Y$38  /  타입: Expression
+     수식: =Y38 > 0
+     글꼴: color=rgb(255,0,0)  bold=True  italic=False
+     배경 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+     테두리 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+
+[30] 범위: $X$38  /  타입: Expression
+     수식: =X38 > 0
+     글꼴: color=rgb(255,0,0)  bold=True  italic=False
+     배경 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+     테두리 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+
+[31] 범위: $V$38  /  타입: Expression
+     수식: =V38 > 0
+     글꼴: color=rgb(255,0,0)  bold=True  italic=False
+     배경 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+     테두리 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+
+[32] 범위: $U$38  /  타입: Expression
+     수식: =U38 > 0
+     글꼴: color=rgb(255,0,0)  bold=True  italic=False
+     배경 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+     테두리 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+
+[33] 범위: $G$38:$L$38  /  타입: Expression
+     수식: =G38 < 0
+     글꼴: color=rgb(255,0,0)  bold=None  italic=None
+     배경 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+     테두리 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+
+[34] 범위: $Q$38  /  타입: ColorScale
+     ColorScale[1]: type=1  val=0.0  color=rgb(90,138,198)
+     ColorScale[2]: type=5  val=50.0  color=rgb(252,252,255)
+     ColorScale[3]: type=2  val=0.0  color=rgb(248,105,107)
+
+[35] 범위: $AA$38  /  타입: ColorScale
+     ColorScale[1]: type=1  val=-11829.45214676857  color=rgb(90,138,198)
+     ColorScale[2]: type=5  val=50.0  color=rgb(252,252,255)
+     ColorScale[3]: type=2  val=-11829.45214676857  color=rgb(248,105,107)
+
+[36] 범위: $H$6:$H$35  /  타입: Expression
+     수식: =H6 < 0
+     글꼴: color=rgb(255,0,0)  bold=None  italic=None
+     배경 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+     테두리 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+
+[37] 범위: $R$3  /  타입: Expression
+     수식: ="FALSE"
+     글꼴: color=rgb(255,0,0)  bold=True  italic=False
+     배경 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+     테두리 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+
+[38] 범위: $Y$6:$Y$35  /  타입: Expression
+     수식: =Y6 > 0
+     글꼴: color=rgb(255,0,0)  bold=True  italic=False
+     배경 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+     테두리 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+
+[39] 범위: $X$6:$X$35  /  타입: Expression
+     수식: =X6 > 0
+     글꼴: color=rgb(255,0,0)  bold=True  italic=False
+     배경 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+     테두리 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+
+[40] 범위: $V$6:$V$35  /  타입: Expression
+     수식: =V6 > 0
+     글꼴: color=rgb(255,0,0)  bold=True  italic=False
+     배경 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+     테두리 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+
+[41] 범위: $U$6:$U$35  /  타입: Expression
+     수식: =U6 > 0
+     글꼴: color=rgb(255,0,0)  bold=True  italic=False
+     배경 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+     테두리 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+
+[42] 범위: $S$3:$T$3  /  타입: Expression
+     수식: ="Y"
+     글꼴: color=rgb(255,0,0)  bold=True  italic=False
+     배경 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+     테두리 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+
+[43] 범위: $Q$6:$Q$35  /  타입: ColorScale
+     ColorScale[1]: type=1  val=0.0  color=rgb(90,138,198)
+     ColorScale[2]: type=5  val=50.0  color=rgb(252,252,255)
+     ColorScale[3]: type=2  val=0.0  color=rgb(248,105,107)
+
+[44] 범위: $AA$6:$AA$35  /  타입: ColorScale
+     ColorScale[1]: type=1  val=-6677800.0  color=rgb(90,138,198)
+     ColorScale[2]: type=5  val=50.0  color=rgb(252,252,255)
+     ColorScale[3]: type=2  val=16147382.465752918  color=rgb(248,105,107)
+
+[45] 범위: $R$6:$R$35  /  타입: ColorScale
+     ColorScale[1]: type=1  val=0.0  color=rgb(90,138,198)
+     ColorScale[2]: type=5  val=50.0  color=rgb(252,252,255)
+     ColorScale[3]: type=2  val=0.0  color=rgb(248,105,107)
+
+[46] 범위: $F$6:$F$35  /  타입: ColorScale
+     ColorScale[1]: type=1  val=-723.978  color=rgb(252,252,255)
+     ColorScale[2]: type=2  val=42965.46  color=rgb(248,105,107)
+
+============================================================
+  Option_DashBoard
+============================================================
+
+[1] 범위: $L$3:$M$9  /  타입: ColorScale
+     ColorScale[1]: type=1  val=-7237000.0  color=rgb(90,138,198)
+     ColorScale[2]: type=5  val=50.0  color=rgb(252,252,255)
+     ColorScale[3]: type=2  val=19697500.0  color=rgb(248,105,107)
+
+[2] 범위: $R$130:$X$149  /  타입: Expression
+     수식: =R130 < 0
+     글꼴: color=rgb(255,0,0)  bold=None  italic=None
+     배경 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+     테두리 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+
+[3] 범위: $D$130:$J$149  /  타입: Expression
+     수식: =D130 < 0
+     글꼴: color=rgb(255,0,0)  bold=None  italic=None
+     배경 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+     테두리 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+
+[4] 범위: $R$107:$X$126  /  타입: Expression
+     수식: =R107 < 0
+     글꼴: color=rgb(255,0,0)  bold=None  italic=None
+     배경 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+     테두리 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+
+[5] 범위: $D$107:$J$126  /  타입: Expression
+     수식: =D107 < 0
+     글꼴: color=rgb(255,0,0)  bold=None  italic=None
+     배경 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+     테두리 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+
+[6] 범위: $R$84:$X$103  /  타입: ColorScale
+
+[7] 범위: $D$84:$J$103  /  타입: ColorScale
+
+[8] 범위: $R$61:$X$80  /  타입: Expression
+     수식: =R61 < 0
+     글꼴: color=rgb(255,0,0)  bold=None  italic=None
+     배경 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+     테두리 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+
+[9] 범위: $D$61:$J$80  /  타입: Expression
+     수식: =D61 < 0
+     글꼴: color=rgb(255,0,0)  bold=None  italic=None
+     배경 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+     테두리 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+
+[10] 범위: $D$38:$J$57  /  타입: Expression
+     수식: =D38 < 0
+     글꼴: color=rgb(255,0,0)  bold=None  italic=None
+     배경 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+     테두리 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+
+[11] 범위: $R$38:$X$57  /  타입: Expression
+     수식: =R38 < 0
+     글꼴: color=rgb(255,0,0)  bold=None  italic=None
+     배경 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+     테두리 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+
+[12] 범위: $R$15:$X$34  /  타입: Expression
+     수식: =R15 < 0
+     글꼴: color=rgb(255,0,0)  bold=None  italic=None
+     배경 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+     테두리 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+
+[13] 범위: $D$15:$J$34  /  타입: Expression
+     수식: =D15 < 0
+     글꼴: color=rgb(255,0,0)  bold=None  italic=None
+     배경 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+     테두리 읽기 실패: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+
+[14] 범위: $J$3:$K$9  /  타입: ColorScale
+     ColorScale[1]: type=1  val=-5183539.240445703  color=rgb(90,138,198)
+     ColorScale[2]: type=5  val=50.0  color=rgb(252,252,255)
+     ColorScale[3]: type=2  val=3953505.9082092196  color=rgb(248,105,107)

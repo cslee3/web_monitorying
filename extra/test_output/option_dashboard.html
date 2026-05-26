@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Option DB</title>
+  
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --pos: #3fb950;
+    --neg: #f85149;
+    --accent: #58a6ff;
+    --header-bg: #1f2937;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Consolas', monospace; background: var(--bg); color: var(--text); font-size: 12px; padding: 12px; }
+  h1 { font-size: 16px; color: var(--accent); margin-bottom: 12px; }
+  h2 { font-size: 13px; color: var(--accent); margin: 16px 0 6px; border-bottom: 1px solid var(--border); padding-bottom: 4px; }
+  h3 { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+  .tabs { display: flex; gap: 4px; margin-bottom: 12px; flex-wrap: wrap; }
+  .tab { padding: 4px 12px; border: 1px solid var(--border); border-radius: 4px; cursor: pointer; color: var(--muted); background: var(--surface); }
+  .tab.active { border-color: var(--accent); color: var(--accent); }
+  .panel { display: none; }
+  .panel.active { display: block; }
+  .table-box { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 10px; margin-bottom: 12px; }
+  .scroll-x { overflow-x: auto; }
+  table { border-collapse: collapse; white-space: nowrap; }
+  th { background: var(--header-bg); color: var(--muted); padding: 4px 8px; text-align: right; border-bottom: 1px solid var(--border); position: sticky; top: 0; }
+  th:first-child { text-align: left; }
+  td { padding: 3px 8px; text-align: right; border-bottom: 1px solid var(--border); }
+  td:first-child { text-align: left; }
+  tr:hover td { background: #1f2937; }
+  .pos { color: var(--pos); }
+  .neg { color: var(--neg); }
+  .empty { color: var(--muted); font-style: italic; padding: 8px; }
+  #last-updated { font-size: 10px; color: var(--muted); margin-bottom: 8px; }
+</style>
+
+</head>
+<body>
+  <h1>Option DB</h1>
+  
+    <div class="table-box">
+        <h3>Option DB</h3>
+        <div class="scroll-x">
+        <table>
+            <thead><tr><th>StockCode</th><th>StockName</th><th>Delta</th><th>%Gamma</th><th>Volume</th><th>Theo_PnL</th><th>MTM_PnL</th></tr></thead>
+            <tbody><tr><td class="">017670</td><td class="">SK텔레콤</td><td class="neg">-23</td><td class="">0</td><td class="">75735500.0</td><td class="neg">-279,880</td><td class="neg">-717,200</td></tr><tr><td class="">033780</td><td class="">KT&G</td><td class="pos">80</td><td class="">0</td><td class="">9242700.0</td><td class="pos">16,719,715</td><td class="neg">-565,100</td></tr><tr><td class="">011200</td><td class="">HMM</td><td class="pos">50</td><td class="">0</td><td class="">10606000.0</td><td class="pos">3,754,782</td><td class="neg">-54,100</td></tr><tr><td class="">022100</td><td class="">포스코DX</td><td class="">0</td><td class="">0</td><td class="">193616800.0</td><td class="neg">-8,574,200</td><td class="neg">-2,122,500</td></tr><tr><td class="">000810</td><td class="">삼성화재</td><td class="neg">-7</td><td class="">0</td><td class="">62559000.0</td><td class="neg">-3,930,871</td><td class="neg">-856,000</td></tr><tr><td class="">Q5G01P</td><td class="">KSQ150</td><td class="">0</td><td class="">0</td><td class="">54768000.0</td><td class="neg">-6,026,000</td><td class="neg">-12,945,000</td></tr><tr><td class="">K2G01P</td><td class="">KP200</td><td class="">0</td><td class="">0</td><td class="">66107500.0</td><td class="pos">50,615,000</td><td class="pos">50,615,000</td></tr><tr><td class="">017670</td><td class="">SK텔레콤</td><td class="">nan</td><td class="">nan</td><td class="">0.0</td><td class="">nan</td><td class="">nan</td></tr><tr><td class="">033780</td><td class="">KT&G</td><td class="">nan</td><td class="">nan</td><td class="">0.0</td><td class="">nan</td><td class="">nan</td></tr><tr><td class="">011200</td><td class="">HMM</td><td class="">nan</td><td class="">nan</td><td class="">0.0</td><td class="">nan</td><td class="">nan</td></tr><tr><td class="">022100</td><td class="">포스코DX</td><td class="">nan</td><td class="">nan</td><td class="">0.0</td><td class="">nan</td><td class="">nan</td></tr><tr><td class="">000810</td><td class="">삼성화재</td><td class="">nan</td><td class="">nan</td><td class="">0.0</td><td class="">nan</td><td class="">nan</td></tr><tr><td class="">Q5G01P</td><td class="">KSQ150</td><td class="">nan</td><td class="">nan</td><td class="">0.0</td><td class="">nan</td><td class="">nan</td></tr><tr><td class="">K2G01P</td><td class="">KP200</td><td class="">nan</td><td class="">nan</td><td class="">0.0</td><td class="">nan</td><td class="">nan</td></tr></tbody>
+        </table>
+        </div>
+    </div>
+    
+</body>
+</html>

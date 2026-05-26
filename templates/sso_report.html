@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"/>
+<title>SSO MM Dashboard</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', sans-serif; font-size: 12px; background: #fff; }
+
+  /* ── info-bar ─────────────────────────────────────────── */
+  .info-bar {
+    display: flex; align-items: center; gap: 20px;
+    padding: 5px 10px; background: #eef2f6; border-bottom: 1px solid #d0d8e0;
+    position: sticky; top: 0; z-index: 20;
+  }
+  .dot { width:8px; height:8px; border-radius:50%; background:#ccc;
+         display:inline-block; margin-right:6px; transition:background .2s; }
+  .dot.live  { background: #2ecc71; }
+  .dot.error { background: #e74c3c; }
+  .updated { margin-left: auto; color: #888; font-size: 11px; }
+
+  /* ── 공통 테이블 ──────────────────────────────────────── */
+  .tbl-wrap { overflow: auto; }
+  table { border-collapse: collapse; white-space: nowrap; }
+  thead th {
+    background: #202123; color: #fff; padding: 4px 8px;
+    font-size: 11px; text-align: center; border: 1px solid #444;
+    position: sticky; top: 0; z-index: 5;
+  }
+  td { padding: 2px 8px; border: 1px solid #e0e0e0; font-size: 12px; }
+  tr:hover td { background: #fffde7 !important; }
+
+  @keyframes flash { 0% { background:#fff176; } 100% { background:transparent; } }
+  .flash { animation: flash 0.8s ease-out; }
+  .pnl-green { color: #1a7c34; }
+  .pnl-red   { color: #cc0000; }
+
+  /* ── 요약 섹션 ────────────────────────────────────────── */
+  #summarySection { padding: 8px 10px 0; }
+
+  /* ── 종목 버튼 바 ─────────────────────────────────────── */
+  #btnBar {
+    display: flex; flex-wrap: wrap; gap: 6px;
+    padding: 8px 10px; border-top: 1px solid #e0e0e0;
+    border-bottom: 2px solid #d0d8e0; background: #f7f9fc;
+  }
+  .stock-btn {
+    padding: 4px 14px; font-size: 12px; cursor: pointer;
+    border: 1px solid #b0bec5; border-radius: 3px; background: #fff;
+    white-space: nowrap; transition: background .15s, border-color .15s;
+  }
+  .stock-btn:hover  { background: #e3f2fd; border-color: #90caf9; }
+  .stock-btn.active { background: #1565c0; color: #fff; border-color: #1565c0; }
+
+  /* ── 상세 패널 ────────────────────────────────────────── */
+  #detailPanel { display: none; padding: 10px 10px 20px; }
+
+  #detailHeader {
+    display: flex; align-items: center; gap: 10px;
+    padding-bottom: 6px; margin-bottom: 8px;
+    border-bottom: 2px solid #202123;
+  }
+  #detailTitle { font-size: 13px; font-weight: bold; }
+  #detailClose {
+    margin-left: auto; padding: 2px 10px; font-size: 11px;
+    border: 1px solid #bbb; border-radius: 3px;
+    background: #fff; cursor: pointer;
+  }
+  #detailClose:hover { background: #fee2e2; border-color: #f87171; }
+
+  #detailTblWrap { max-height: 600px; overflow: auto; }
+  #detailTblWrap thead th { top: 0; }
+
+  /* 행 타입별 스타일 */
+  tr.row-summary td { background: #e8eaf6; font-weight: bold; }
+  tr.row-summary:hover td { background: #c5cae9 !important; }
+  tr.row-futures td { background: #f3f4f6; color: #555; }
+  tr.row-futures:hover td { background: #fffde7 !important; }
+  tr.row-atm td { background: #fff9c4; font-weight: bold; }
+  tr.row-atm:hover td { background: #fffde7 !important; }
+
+  #status { padding: 40px; text-align: center; color: #888; font-size: 14px; }
+</style>
+</head>
+<body>
+
+<div class="info-bar" id="infoBar" style="display:none">
+  <span class="dot" id="liveDot"></span>
+  <div style="font-size:11px; font-weight:bold;">SSO MM</div>
+  <div class="updated">Updated: <span id="hUpdated">-</span></div>
+</div>
+
+<div id="status">데이터 로딩 중...</div>
+
+<!-- 요약 테이블 -->
+<div id="summarySection" style="display:none">
+  <div class="tbl-wrap">
+    <table>
+      <thead id="thead"></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- 종목 선택 버튼 (summary rows에서 동적 생성) -->
+<div id="btnBar" style="display:none"></div>
+
+<!-- 상세 패널 -->
+<div id="detailPanel">
+  <div id="detailHeader">
+    <div id="detailTitle"></div>
+    <button id="detailClose" onclick="closeDetail()">✕ 닫기</button>
+  </div>
+  <div class="tbl-wrap" id="detailTblWrap"></div>
+</div>
+
+<script>
+/* ── 상태 ─────────────────────────────────────────────────────────── */
+const CS_CIDX    = new Set([8, 10]);  // Theo PnL, MTM PnL
+let numCidx      = new Set();
+let colOrder     = [];
+let es           = null;
+let wasError     = false;
+let selectedCode = null;
+let fullData     = null;
+let detailTimer  = null;
+
+/* ── 초기 로드 ────────────────────────────────────────────────────── */
+async function loadFull() {
+  try {
+    const res = await fetch("/api/sso");
+    if (!res.ok) { setTimeout(loadFull, 2000); return; }
+    const d = await res.json();
+    if (d.error) { setTimeout(loadFull, 2000); return; }
+    fullData = d;
+    buildTable(d);
+    buildButtons(d);
+    connectStream();
+  } catch(e) {
+    document.getElementById("status").textContent = "서버 연결 실패, 재시도 중...";
+    setTimeout(loadFull, 2000);
+  }
+}
+
+/* ── 요약 테이블 ──────────────────────────────────────────────────── */
+function buildTable(d) {
+  colOrder = d.cols.map(([cidx, hdr]) => ({ cidx, hdr }));
+  numCidx  = new Set(d.num_cidx);
+  document.getElementById("hUpdated").textContent = d.updated;
+
+  document.getElementById("thead").innerHTML =
+    "<tr>" + colOrder.map(c => `<th>${c.hdr}</th>`).join("") + "</tr>";
+
+  let html = "";
+  for (let ri = 0; ri < d.rows.length; ri++) {
+    html += `<tr id="r-${ri}">`;
+    for (const { cidx } of colOrder) {
+      const cell = d.rows[ri][String(cidx)] || { v: "", color: "" };
+      html += makeTd(ri, cidx, cell);
+    }
+    html += "</tr>";
+  }
+  document.getElementById("tbody").innerHTML = html;
+
+  document.getElementById("status").style.display          = "none";
+  document.getElementById("infoBar").style.display         = "flex";
+  document.getElementById("summarySection").style.display  = "block";
+  document.getElementById("btnBar").style.display          = "flex";
+}
+
+function makeTd(ri, cidx, cell) {
+  const align  = numCidx.has(cidx) ? "right" : "left";
+  const styles = [`text-align:${align}`];
+  if (CS_CIDX.has(cidx) && cell.bg) styles.push(`background:${cell.bg}`);
+  return `<td id="c-${ri}-${cidx}" style="${styles.join(";")}">${cell.v}</td>`;
+}
+
+/* ── 버튼 (summary rows에서 동적 생성) ───────────────────────────── */
+function buildButtons(d) {
+  const bar = document.getElementById("btnBar");
+  bar.innerHTML = "";
+  d.rows.forEach(row => {
+    const code = (row["0"] || {}).v || "";
+    const name = (row["1"] || {}).v || code;
+    if (!code) return;
+    const btn = document.createElement("button");
+    btn.className   = "stock-btn";
+    btn.id          = `btn-${code}`;
+    btn.textContent = name;
+    btn.onclick     = () => selectStock(code);
+    bar.appendChild(btn);
+  });
+}
+
+/* ── SSE ──────────────────────────────────────────────────────────── */
+function connectStream() {
+  if (es) es.close();
+  es = new EventSource("/api/sso/stream");
+
+  es.onopen = () => {
+    document.getElementById("liveDot").className = "dot";
+    if (wasError) {
+      wasError = false;
+      fetch("/api/sso").then(r => r.ok ? r.json() : null)
+        .then(d => { if (d && !d.error) { fullData = d; buildTable(d); buildButtons(d); } }).catch(() => {});
+    }
+  };
+
+  es.onmessage = e => {
+    const d = JSON.parse(e.data);
+    if (d.type === "connected") return;
+    applyChanges(d.cells, d.updated);
+  };
+
+  es.onerror = () => {
+    document.getElementById("liveDot").className = "dot error";
+    wasError = true;
+  };
+}
+
+function applyChanges(cells, updated) {
+  document.getElementById("hUpdated").textContent = updated;
+  for (const { key, v, color, bg } of cells) {
+    const [ri, cidx] = key.split("_").map(Number);
+    const td = document.getElementById(`c-${ri}-${cidx}`);
+    if (!td) continue;
+    td.textContent = v;
+    if (CS_CIDX.has(cidx)) td.style.background = bg || "";
+    td.classList.remove("flash");
+    void td.offsetWidth;
+    td.classList.add("flash");
+    td.addEventListener("animationend", () => td.classList.remove("flash"), { once: true });
+  }
+  const dot = document.getElementById("liveDot");
+  dot.classList.add("live");
+  setTimeout(() => dot.classList.remove("live"), 300);
+}
+
+/* ── 종목 선택 ────────────────────────────────────────────────────── */
+function selectStock(code) {
+  if (selectedCode === code) { closeDetail(); return; }
+
+  selectedCode = code;
+  document.querySelectorAll(".stock-btn").forEach(b => b.classList.remove("active"));
+  const btn = document.getElementById(`btn-${code}`);
+  if (btn) btn.classList.add("active");
+
+  clearInterval(detailTimer);
+  fetchAndRender();
+  detailTimer = setInterval(fetchAndRender, 3000);
+}
+
+async function fetchAndRender() {
+  try {
+    const res = await fetch("/api/sso");
+    if (!res.ok) return;
+    const d = await res.json();
+    if (d.error) return;
+    fullData = d;
+    document.getElementById("hUpdated").textContent = d.updated;
+    renderDetail(selectedCode);
+  } catch(e) {}
+}
+
+/* ── 상세 테이블 (종목 전체 rows를 한 테이블에) ──────────────────── */
+const DETAIL_HDRS = [
+  [0,  "StockCode",   "left"],
+  [1,  "Name/Code",   "left"],
+  [2,  "C.Qty",       "right"],
+  [3,  "C.△Qty",      "right"],
+  [4,  "C.Vol",       "right"],
+  [5,  "C.Delta",     "right"],
+  [6,  "C.Gamma",     "right"],
+  [7,  "C.Eval PnL",  "right"],
+  [8,  "C.Trade PnL", "right"],
+  [9,  "Call IV",     "right"],
+  [10, "Call OTM",    "center"],
+  [11, "Call Code",   "left"],
+  [12, "Strike",      "right"],
+  [13, "Put Code",    "left"],
+  [14, "Put IV",      "right"],
+  [15, "Put OTM",     "center"],
+  [16, "P.Qty",       "right"],
+  [17, "P.△Qty",      "right"],
+  [18, "P.Vol",       "right"],
+  [19, "P.Delta",     "right"],
+  [20, "P.Gamma",     "right"],
+  [21, "P.Eval PnL",  "right"],
+  [22, "P.Trade PnL", "right"],
+];
+
+function renderDetail(code) {
+  if (!fullData || !fullData.detail) return;
+  const stock = fullData.detail[code];
+  if (!stock) return;
+
+  document.getElementById("detailPanel").style.display = "block";
+  document.getElementById("detailTitle").textContent   = `${code}  ${stock.name}`;
+
+  const wrap = document.getElementById("detailTblWrap");
+  if (!stock.rows || !stock.rows.length) {
+    wrap.innerHTML = "<span style='color:#aaa;font-size:11px'>데이터 없음</span>";
+    return;
+  }
+
+  let html = `<table><thead><tr>` +
+    DETAIL_HDRS.map(([,h,a]) => `<th style="text-align:${a}">${h}</th>`).join("") +
+    `</tr></thead><tbody>`;
+
+  for (const row of stock.rows) {
+    const otm = (row.cells["10"] || {}).v || "";
+    let cls = "";
+    if      (row.type === "summary") cls = "row-summary";
+    else if (row.type === "futures") cls = "row-futures";
+    else if (otm === "ATM")          cls = "row-atm";
+
+    html += `<tr class="${cls}">`;
+    for (const [cidx, , align] of DETAIL_HDRS) {
+      const cell = row.cells[String(cidx)] || { v: "", color: "" };
+      const cc   = cell.color === "green" ? "pnl-green"
+                 : cell.color === "red"   ? "pnl-red" : "";
+      html += `<td class="${cc}" style="text-align:${align}">${cell.v}</td>`;
+    }
+    html += `</tr>`;
+  }
+
+  html += `</tbody></table>`;
+  wrap.innerHTML = html;
+}
+
+/* ── 닫기 ─────────────────────────────────────────────────────────── */
+function closeDetail() {
+  selectedCode = null;
+  clearInterval(detailTimer);
+  detailTimer  = null;
+  document.getElementById("detailPanel").style.display = "none";
+  document.querySelectorAll(".stock-btn").forEach(b => b.classList.remove("active"));
+}
+
+loadFull();
+</script>
+</body>
+</html>

@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Market Making</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body, html { height: 100vh; font-family: 'Segoe UI', sans-serif; }
+
+    #loginContainer {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100%;
+      background-color: #f5f5f5;
+    }
+
+    #loginBox {
+      background: white;
+      padding: 40px;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      width: 300px;
+    }
+
+    #loginBox h2 { margin-bottom: 20px; text-align: center; }
+
+    #loginBox input {
+      width: 100%;
+      padding: 10px;
+      margin-bottom: 15px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+
+    #loginBox button {
+      width: 100%;
+      padding: 10px;
+      background-color: #202123;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    #loginBox .error {
+      color: red;
+      font-size: 14px;
+      text-align: center;
+    }
+
+    #mainApp {
+      display: none;
+      height: 100vh;
+      display: flex;
+    }
+
+    .sidebar {
+      width: 155px;
+      background-color: #202123;
+      color: white;
+      padding: 20px 16px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .sidebar h2 {
+      margin-bottom: 20px;
+      font-size: 16px;
+      color: #ccc;
+      padding-left: 0;   
+    }
+
+    .sidebar h2 a.home-link {
+      font-size: 16px;     
+      font-weight: bold;
+      color: #FFB347;      /* ✅ 주황색 */
+      text-decoration: none;
+      cursor: pointer;
+      display: inline-block;
+      padding-left: 0;   
+    }
+
+    .sidebar h2 a.home-link:hover {
+      color: #fff;         /* hover 시 흰색 */
+    }
+
+
+    .sidebar a {
+      padding: 8px;
+      font-size: 14px;
+      border-radius: 6px;
+      color: #ccc;
+      text-decoration: none;
+      margin-bottom: 10px;
+      transition: background-color 0.2s;
+      cursor: pointer;
+      font-weight: normal;
+    }
+
+    .sidebar a.active {
+      font-weight: bold;
+      color: #4DA6FF; 
+    }
+
+    .sidebar a:hover {
+      background-color: #40414f;
+      color: white;
+    }
+
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .topbar {
+      background-color: #fff;
+      padding: 16px 24px;
+      border-bottom: 1px solid #ddd;
+      font-size: 20px;
+      font-weight: bold;
+    }
+
+    .content {
+      flex: 1;
+      overflow: hidden;
+    }
+
+    iframe { 
+      width: 112%; 
+      height: 112%; 
+      transform: scale(0.89);
+      transform-origin: top left;
+      border: none;
+    }
+
+  </style>
+</head>
+<body>
+
+  <!-- 본문 앱 -->
+  <div id="mainApp">
+    <div class="sidebar">
+      <h2>
+        <a onclick="goHome()" class="home-link">Home</a>
+      </h2>
+      <h2 style="color:#FFB347;">Market Making</h2>
+      <a onclick="loadPage('ssfo_pnl.html', 'SSF MM')">SSF MM</a>
+      <a onclick="loadPage('ssfo_idx.html', 'SSF MM2')">SSF MM2</a>
+      <a onclick="loadPage('sso_report.html', 'SSO MM')">SSO MM</a>
+      <a onclick="loadPage('ssfo_score.html', 'MM Score')">MM Score</a>
+      <h2></h2>
+      <h2 style="color:#FFB347;">Arb Trading</h2>
+      <a onclick="loadPage('ssf_arb.html', 'SSF Arb')">SSF Arb</a>
+      <a onclick="loadPage('arb_trading_report.html', 'ETP Arb')">ETP Arb</a>
+      <a onclick="loadPage('sso_syn_report.html', 'SSO Syn Arb')">SSO Syn Arb</a>
+      <h2></h2>
+      <h2 style="color:#FFB347;">PnL Report</h2>
+      <a onclick="loadPage('PnL_Report.html', 'PnL_Report')">PnL Report</a>
+    </div>
+
+    <div class="main">
+      <div class="topbar">
+        <span id="pageTitle">
+          Multi Asset Webpage
+        </span>
+        <label class="date-label" lang="en" style="margin-left:16px; font-size:14px;">
+          Date
+        <input type="date" id="datePicker" style="margin-left:8px; padding:4px 6px;" lang="en" onchange="loadArchivePage()" />
+      </label>
+    </div>
+
+      <div class="content">
+        <iframe id="mainFrame" src="Welcome.html"></iframe>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let currentPage = "";
+    let autoRefreshId = null;
+
+    function loadArchivePage() {
+      const dp = document.getElementById("datePicker");
+      if (dp && currentPage) {
+        // yyyy-mm-dd → yyyymmdd 로 변환
+        const dateStr = dp.value.replace(/-/g, "");  
+
+        const pageName = currentPage.replace('.html',''); 
+        document.getElementById("mainFrame").src = `archive/${pageName}_${dateStr}.html`;
+
+        // 날짜 기반 페이지를 불러오면 자동 새로고침 중단
+        if (autoRefreshId) {
+          clearInterval(autoRefreshId);
+          autoRefreshId = null;
+        }
+      }
+    }
+
+    function showMainApp() {
+      document.getElementById("loginContainer").style.display = "none";
+      document.getElementById("mainApp").style.display = "flex";
+    }
+
+    function loadPage(page, title) {
+      currentPage = page;
+      const iframe = document.getElementById("mainFrame");
+      iframe.src = `${page}?_=${Date.now()}`;
+
+      const titleEl = document.getElementById("pageTitle");
+      if (titleEl && title) {
+        titleEl.textContent = title;
+      }
+
+      const links = document.querySelectorAll(".sidebar a");
+      links.forEach(link => link.classList.remove("active")); // 기존 active 제거
+      event.target.classList.add("active"); // 현재 클릭한 메뉴만 active 추가
+
+      // 달력(datePicker) 초기화 → 오늘 날짜로 설정
+      const dp = document.getElementById("datePicker");
+      if (dp) {
+        const todayStr = new Date().toISOString().slice(0,10); // yyyy-mm-dd
+        dp.value = todayStr;
+      }
+
+      // SSF MM만 축소 표시
+      if (page === "ssfo_pnl.html") {
+        iframe.classList.add("ssfmm");
+      } else {
+        iframe.classList.remove("ssfmm");
+      }
+
+      if (autoRefreshId) {
+        clearInterval(autoRefreshId);
+        autoRefreshId = null;
+      }
+    }
+
+    // 페이지 로드시 localStorage 확인
+    window.onload = () => {
+      const dp = document.getElementById("datePicker");
+      if (dp) {
+        const today = new Date();
+        const year = today.getFullYear();
+        const month = String(today.getMonth() + 1).padStart(2, '0');
+        const day = String(today.getDate()).padStart(2, '0');
+        dp.value = `${year}-${month}-${day}`; // ✅ 로컬 날짜
+        dp.setAttribute('lang', 'en');
+      }
+      showMainApp();      
+    };
+
+    function goHome() {
+      currentPage = "";
+      const iframe = document.getElementById("mainFrame");
+      iframe.src = ""; // iframe 비우기
+
+      // 상단 타이틀 초기화
+      const titleEl = document.getElementById("pageTitle");
+      if (titleEl) {
+        titleEl.textContent = "Multi Asset Webpage";
+      }
+
+      // 사이드바 active 초기화
+      const links = document.querySelectorAll(".sidebar a");
+      links.forEach(link => link.classList.remove("active"));
+
+      // 자동 새로고침 중지
+      if (autoRefreshId) {
+        clearInterval(autoRefreshId);
+        autoRefreshId = null;
+      }
+    }
+
+    function goHome() {
+      currentPage = "";
+      const iframe = document.getElementById("mainFrame");
+      iframe.src = "welcome.html"; 
+
+      // 상단 타이틀 초기화
+      const titleEl = document.getElementById("pageTitle");
+      if (titleEl) {
+        titleEl.textContent = "Multi Asset Webpage";
+      }
+
+      // 사이드바 active 초기화
+      const links = document.querySelectorAll(".sidebar a");
+      links.forEach(link => link.classList.remove("active"));
+
+      // 자동 새로고침 중지
+      if (autoRefreshId) {
+        clearInterval(autoRefreshId);
+        autoRefreshId = null;
+      }
+    }
+
+
+  </script>
+
+</body>
+</html>
