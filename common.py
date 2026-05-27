@@ -15,6 +15,27 @@ except NameError:
 BOOK_NAME = "GlobalMM_Realtime_Monitoring_V2.xlsb"
 
 
+# ── 주식 호가 틱 단위 (KRX 기준, STOCK 타입) ──────────────────────────────
+# 출처: workspace_ref/XCommon/XLibraries.h getHoga()
+# (price_from, price_to, tick) — price_to는 미만(exclusive)
+STOCK_TICK_TABLE = [
+    (        0,    2_000,    1),
+    (    2_000,    5_000,    5),
+    (    5_000,   20_000,   10),
+    (   20_000,   50_000,   50),
+    (   50_000,  200_000,  100),
+    (  200_000,  500_000,  500),
+    (  500_000, 9_999_999, 1_000),
+]
+
+def get_stock_tick(price: float) -> int:
+    """주가에 해당하는 호가 틱 단위 반환."""
+    for lo, hi, tick in STOCK_TICK_TABLE:
+        if lo <= price < hi:
+            return tick
+    return 1_000
+
+
 # ── Excel COM 에러값 판별 ──────────────────────────────────────────────────
 
 def _is_xl_error(v):
@@ -59,6 +80,27 @@ def _rgb(color):
 
 # ── ColorScale 배경색 계산 ─────────────────────────────────────────────────
 
+def _colorscale_rank(vals: list) -> dict:
+    """
+    값 리스트를 순위 기반 배경색 dict로 변환. {float_val: rgb_str}
+    음수: 가장 음수(1위) → 진한 파랑, 덜 음수 → 연한 파랑
+    양수: 가장 양수(1위) → 진한 빨강, 덜 양수 → 연한 빨강
+    동일 값은 동일 색.
+    """
+    negs = sorted(set(v for v in vals if v < 0))   # 오름차순: 가장 음수가 index 0
+    pos  = sorted(set(v for v in vals if v > 0))   # 오름차순: 가장 양수가 index -1
+    result = {}
+    n = len(negs)
+    for i, v in enumerate(negs):
+        t = (n - i) / n   # index 0(최소) → t=1(진), index n-1(최대) → t=1/n(연)
+        result[v] = f"rgb({int(255-t*(255-111))},{int(255-t*(255-168))},{int(255-t*(255-220))})"
+    n = len(pos)
+    for i, v in enumerate(pos):
+        t = (i + 1) / n   # index 0(최소) → t=1/n(연), index n-1(최대) → t=1(진)
+        result[v] = f"rgb({int(255-t*(255-224))},{int(255-t*(255-102))},{int(255-t*(255-102))})"
+    return result
+
+
 def _colorscale_bg(val, vmin, vmax):
     """
     val의 min/max 대비 상대 위치로 파랑→흰→빨강 배경색 계산.
@@ -70,11 +112,8 @@ def _colorscale_bg(val, vmin, vmax):
     except (TypeError, ValueError):
         return ""
 
-    if vmin is None or vmax is None or vmin == vmax:
-        return ""
-
     if v < 0:
-        if vmin >= 0:
+        if vmin is None or vmin >= 0:
             return ""
         t = max(0.0, min(1.0, v / vmin))
         r = int(255 - t * (255 - 111))
@@ -82,7 +121,7 @@ def _colorscale_bg(val, vmin, vmax):
         b = int(255 - t * (255 - 220))
         return f"rgb({r},{g},{b})"
     elif v > 0:
-        if vmax <= 0:
+        if vmax is None or vmax <= 0:
             return ""
         t = max(0.0, min(1.0, v / vmax))
         r = int(255 - t * (255 - 224))

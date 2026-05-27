@@ -39,11 +39,6 @@
   .total-row td { background: #e2efda !important; font-weight: bold; }
   .sep-row td { background: #f0f0f0; height: 5px; padding: 0; border: none; }
 
-  @keyframes flash {
-    0%   { background-color: #fff176; }
-    100% { background-color: transparent; }
-  }
-  .flash { animation: flash 0.8s ease-out; }
 
   .pnl-green { color: #1a7c34; }
   .pnl-red   { color: #cc0000; }
@@ -53,6 +48,23 @@
   /* .dim-row:hover td { background: #fffde7 !important; } */
 
   #status { padding: 40px; text-align: center; color: #888; font-size: 14px; }
+
+  #filterBtn {
+    font-size: 11px; padding: 2px 10px; cursor: pointer;
+    border: 1px solid #999; border-radius: 3px;
+    background: #fff; color: #333;
+  }
+  tr[data-stripe="odd"] td { background: #fff3e0 !important; }
+  tr[data-stripe="odd"]:hover td { background: #fffde7 !important; }
+
+  #filterBtn.active, #filterBtn2.active {
+    background: #202123; color: #fff; border-color: #202123;
+  }
+  #filterBtn2 {
+    font-size: 11px; padding: 2px 10px; cursor: pointer;
+    border: 1px solid #999; border-radius: 3px;
+    background: #fff; color: #333;
+  }
 </style>
 </head>
 <body>
@@ -67,6 +79,8 @@
   <div class="item"><span id="hU2"></span> <span id="hV2"></span></div>
   <div class="item"><span id="hU3"></span> <span id="hV3"></span></div>
   <div class="updated">Updated: <span id="hUpdated">-</span></div>
+  <button id="filterBtn" onclick="toggleFilter(1)">DIM 필터</button>
+  <button id="filterBtn2" onclick="toggleFilter(2)">DIM 필터 2</button>
 </div>
 
 <div id="status">데이터 로딩 중...</div>
@@ -84,18 +98,53 @@ let colOrder = [];
 let es = null;
 let wasError = false;
 
-// const DIM_STOCKS = new Set([
-//   "010950", // S-Oil
-//   "086280", // 현대글로비스
-//   "003230", // 삼양식품
-//   "010060", // OCI홀딩스
-//   "008770", // 호텔신라
-//   "010130", // 고려아연
-//   "001800", // 오리온홀딩스
-//   "166090", // 하나머티리얼즈
-//   "108490", // 로보티즈
-//   "033780", // KT&G
-// ]);
+const DIM_STOCKS = new Set([
+  "010950", // S-Oil
+  "086280", // 현대글로비스
+  "003230", // 삼양식품
+  "010060", // OCI홀딩스
+  "008770", // 호텔신라
+  "010130", // 고려아연
+  "001800", // 오리온홀딩스
+  "166090", // 하나머티리얼즈
+  "108490", // 로보티즈
+  "033780", // KT&G
+]);
+
+let filterMode = 0; // 0=전체, 1=DIM만, 2=비DIM만
+
+function toggleFilter(mode) {
+  filterMode = (filterMode === mode) ? 0 : mode;
+  document.getElementById("filterBtn").classList.toggle("active", filterMode === 1);
+  document.getElementById("filterBtn2").classList.toggle("active", filterMode === 2);
+  applyFilter();
+}
+
+function applyFilter() {
+  const rows = document.querySelectorAll("#tbody tr");
+  let visIdx = 0;
+  rows.forEach(tr => {
+    if (filterMode === 0) {
+      tr.style.display = "";
+      tr.querySelectorAll("td").forEach(td => { td.style.removeProperty("--stripe"); });
+      tr.dataset.stripe = "";
+      return;
+    }
+    if (tr.classList.contains("sep-row") || tr.classList.contains("total-row")) {
+      tr.style.display = "none"; return;
+    }
+    const tds = tr.querySelectorAll("td");
+    const code = tds[0] ? tds[0].textContent.trim() : "";
+    const name = tds[1] ? tds[1].textContent.trim() : "";
+    const inDim = DIM_STOCKS.has(code);
+    // DIM 필터 2: SK하이닉스·삼성전자 주식선물(각 2종) 제외
+    const isDim2Exclude = filterMode === 2 && (name.includes("하이닉스") || name.includes("삼성전자"));
+    const show = !isDim2Exclude && (filterMode === 1 ? inDim : !inDim);
+    tr.style.display = show ? "" : "none";
+    tr.dataset.stripe = show && visIdx % 2 === 1 ? "odd" : "";
+    if (show) visIdx++;
+  });
+}
 
 
 async function loadFull() {
@@ -149,12 +198,13 @@ function buildTable(d) {
         html += `<tr class="sep-row"><td colspan="${colOrder.length}"></td></tr>`;
         continue;
       }
-      const row   = sec.rows[ri];
+      const row = sec.rows[ri];
+      const lastPrice = parseFloat((row["2"]?.v || "0").replace(/,/g, "")) || 0;
       // const isDim = DIM_STOCKS.has(row["0"]?.v || "");
       html += `<tr class="${meta.total ? "total-row" : ""}">`;
       for (const { cidx } of colOrder) {
         const cell = row[String(cidx)] || { v: "", color: "" };
-        html += makeTd(sec.id, ri, cidx, cell);
+        html += makeTd(sec.id, ri, cidx, cell, lastPrice);
       }
       html += "</tr>";
     }
@@ -176,7 +226,34 @@ function buildTable(d) {
 // F=4, Q=15, R=16, AA=25 — ColorScale 그라디언트 적용 컬럼
 const CS_CIDX = new Set([4, 15, 16, 25]);
 
-function makeTd(sid, ri, cidx, cell) {
+// 주식 호가 틱 단위 (common.py STOCK_TICK_TABLE 동일)
+function getStockTick(price) {
+  if (price <    2000) return 1;
+  if (price <    5000) return 5;
+  if (price <   20000) return 10;
+  if (price <   50000) return 50;
+  if (price <  200000) return 100;
+  if (price <  500000) return 500;
+  return 1000;
+}
+
+const SPREAD_CIDX = new Set([19, 20, 22, 23]);
+
+function spreadStyle(sp, lastPrice) {
+  const tick = getStockTick(lastPrice);
+  if (sp > 0)            return { bg: "#ffff00", color: "#cc0000", fw: "bold" };
+  if (sp + tick > 0)     return { bg: "",        color: "#cc0000", fw: "bold" };
+  return                          { bg: "",        color: "",        fw: ""     };
+}
+
+function applySpreadStyle(td, sp, lastPrice) {
+  const s = spreadStyle(sp, lastPrice);
+  td.style.background = s.bg;
+  td.style.color      = s.color;
+  td.style.fontWeight = s.fw;
+}
+
+function makeTd(sid, ri, cidx, cell, lastPrice) {
   const styles = [];
   styles.push(`text-align:${numCidx.has(cidx) ? "right" : "left"}`);
 
@@ -190,6 +267,14 @@ function makeTd(sid, ri, cidx, cell) {
     styles.push("background:#ffff00");
     styles.push("color:#cc0000");
     styles.push("font-weight:bold");
+  }
+
+  // Spread Alert (Ex1 B-Sp/S-Sp, Ex2 B-Sp/S-Sp)
+  if (SPREAD_CIDX.has(cidx)) {
+    const s = spreadStyle(parseFloat(cell.v) || 0, lastPrice || 0);
+    if (s.bg)    styles.push(`background:${s.bg}`);
+    if (s.color) styles.push(`color:${s.color}`);
+    if (s.fw)    styles.push(`font-weight:${s.fw}`);
   }
 
   const colorCls = cell.color === "green" ? "pnl-green"
@@ -257,14 +342,17 @@ function applyChanges(cells, updated) {
       }
     }
 
+    // Spread Alert 실시간 적용/해제
+    if (SPREAD_CIDX.has(cidx)) {
+      const lpTd = document.getElementById(`c-${sid}-${ri}-2`);
+      const lastPrice = lpTd ? parseFloat(lpTd.textContent.replace(/,/g, "")) || 0 : 0;
+      applySpreadStyle(td, parseFloat(v) || 0, lastPrice);
+    }
+
     td.classList.remove("pnl-green", "pnl-red");
     if (color === "green") td.classList.add("pnl-green");
     else if (color === "red") td.classList.add("pnl-red");
 
-    td.classList.remove("flash");
-    void td.offsetWidth;
-    td.classList.add("flash");
-    td.addEventListener("animationend", () => td.classList.remove("flash"), { once: true });
   }
 
   const dot = document.getElementById("liveDot");

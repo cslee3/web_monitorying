@@ -44,11 +44,6 @@
   tr:hover td { background: #fffde7 !important; }
   .total-row td { background: #e2efda !important; font-weight: bold; }
 
-  @keyframes flash {
-    0%   { background-color: #fff176; }
-    100% { background-color: transparent; }
-  }
-  .flash { animation: flash 0.8s ease-out; }
 
   .pnl-green { color: #1a7c34; }
   .pnl-red   { color: #cc0000; }
@@ -176,10 +171,6 @@ function applyChanges(cells, updated) {
     if (!td) continue;
 
     td.textContent = v;
-    td.classList.remove("flash");
-    void td.offsetWidth;
-    td.classList.add("flash");
-    td.addEventListener("animationend", () => td.classList.remove("flash"), { once: true });
   }
 
   const dot = document.getElementById("liveDot");

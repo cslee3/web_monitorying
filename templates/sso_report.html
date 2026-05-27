@@ -30,8 +30,6 @@
   td { padding: 2px 8px; border: 1px solid #e0e0e0; font-size: 12px; }
   tr:hover td { background: #fffde7 !important; }
 
-  @keyframes flash { 0% { background:#fff176; } 100% { background:transparent; } }
-  .flash { animation: flash 0.8s ease-out; }
   .pnl-green { color: #1a7c34; }
   .pnl-red   { color: #cc0000; }
 
@@ -229,10 +227,6 @@ function applyChanges(cells, updated) {
     if (!td) continue;
     td.textContent = v;
     if (CS_CIDX.has(cidx)) td.style.background = bg || "";
-    td.classList.remove("flash");
-    void td.offsetWidth;
-    td.classList.add("flash");
-    td.addEventListener("animationend", () => td.classList.remove("flash"), { once: true });
   }
   const dot = document.getElementById("liveDot");
   dot.classList.add("live");

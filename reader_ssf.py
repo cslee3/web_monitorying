@@ -22,7 +22,7 @@ import pywintypes
 # COM 바쁨 에러 코드 (DDE/VBA 실행 중 등)
 _COM_BUSY = {-2147418111, -2147417846}   # RPC_E_CALL_REJECTED, RPC_E_SERVERCALL_RETRYLATER
 
-from common import BASE_DIR, BOOK_NAME, _pct, _num, _date, _colorscale_bg, _is_xl_error
+from common import BASE_DIR, BOOK_NAME, _pct, _num, _date, _colorscale_rank, _is_xl_error
 
 # ── 컬럼 정의 ──────────────────────────────────────────────────────────────
 # MM sections: B5:AA36, B38:AA40, B42:AA43
@@ -105,9 +105,15 @@ TOTAL_VALS = {"합계", "합 계", "Total", "소계"}
 DB_SAVE_START = (9, 5)
 DB_SAVE_END   = (15, 20)
 
+
+
 # ColorScale 그라디언트 적용 컬럼 (cidx 기준)
 # F=4(Amt Mil), Q=15(Delta Shr), R=16(Delta Mil), AA=25(Theo PnL)
 COLORSCALE_CIDX = {4, 15, 16, 25}
+
+# cidx → 스케일 기준 cidx (값도 기준 컬럼에서 가져옴)
+# Delta(Shr) cidx15 는 Delta(Mil) cidx16 기준으로 색상 결정
+COLORSCALE_REF = {15: 16}
 
 
 def _raw(v):
@@ -177,12 +183,13 @@ def _read_section(all_vals, cols, pnl_cidx):
     first_cidx = cols[0][0]
     first_hdr  = cols[0][1]
 
-    # ColorScale 컬럼별 min/max 사전 계산
-    cs_vals = {cidx: [] for cidx in COLORSCALE_CIDX}
+    # ColorScale 순위 기반 색상 사전 계산 (REF 컬럼은 기준 컬럼 스케일 사용)
+    scale_cidx = {COLORSCALE_REF.get(c, c) for c in COLORSCALE_CIDX}
+    cs_vals = {cidx: [] for cidx in scale_cidx}
     for row_data in all_vals:
         if row_data is None:
             continue
-        for cidx in COLORSCALE_CIDX:
+        for cidx in scale_cidx:
             if cidx < len(row_data):
                 v = row_data[cidx]
                 try:
@@ -190,13 +197,7 @@ def _read_section(all_vals, cols, pnl_cidx):
                 except (TypeError, ValueError):
                     pass
 
-    cs_min = {}
-    cs_max = {}
-    for cidx, vals in cs_vals.items():
-        neg = [v for v in vals if v < 0]
-        pos = [v for v in vals if v > 0]
-        cs_min[cidx] = min(neg) if neg else None
-        cs_max[cidx] = max(pos) if pos else None
+    cs_rank = {cidx: _colorscale_rank(vals) for cidx, vals in cs_vals.items()}
 
     for row_data in all_vals:
         if row_data is None:
@@ -215,10 +216,15 @@ def _read_section(all_vals, cols, pnl_cidx):
             fval = fmt(raw) if (raw is not None and raw != "") else ""
             if fval: any_val = True
 
-            # ColorScale 배경색 계산
+            # ColorScale 배경색 계산 (REF 컬럼이 있으면 그 컬럼 값·순위 사용)
             bg = ""
             if cidx in COLORSCALE_CIDX:
-                bg = _colorscale_bg(raw, cs_min.get(cidx), cs_max.get(cidx))
+                ref = COLORSCALE_REF.get(cidx, cidx)
+                ref_raw = row_data[ref] if ref != cidx else raw
+                try:
+                    bg = cs_rank.get(ref, {}).get(float(ref_raw), "")
+                except (TypeError, ValueError):
+                    bg = ""
 
             cells[str(cidx)] = {
                 "v":     fval,
