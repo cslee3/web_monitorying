@@ -244,7 +244,7 @@ class SsoMonitor:
                         self._full_data = data
                     prev_data = data
                     print("[sso_monitor] initial load done")
-                    import time; time.sleep(1.0)
+                    time.sleep(1.0)
                     continue
 
                 changes = []

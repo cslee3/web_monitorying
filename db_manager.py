@@ -24,7 +24,11 @@ except ImportError:
     HAS_CONNECTOR = False
 
 # ── 설정 ──────────────────────────────────────────────────────────────────────
-MYSQL_BIN   = r"D:\OneDrive\mysql\bin"
+# IP 10.115.31.99 (DB 서버 PC): D:\mysql 직접 사용
+# 그 외 PC: D:\OneDrive\mysql (OneDrive 공유 경로)
+import socket as _socket
+_LOCAL_IP = _socket.gethostbyname(_socket.gethostname())
+MYSQL_BIN  = r"D:\mysql\bin" if _LOCAL_IP == "10.115.31.99" else r"D:\OneDrive\mysql\bin"
 MYSQLD      = os.path.join(MYSQL_BIN, "mysqld.exe")
 MYSQLADMIN  = os.path.join(MYSQL_BIN, "mysqladmin.exe")
 

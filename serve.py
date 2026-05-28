@@ -123,13 +123,15 @@ def start():
 
     threading.Thread(target=reader_ssf.monitor.run, daemon=True).start()
     threading.Thread(target=reader_sso.monitor.run, daemon=True).start()
+    save_state = "ON" if reader_ssf.monitor.db_save_enabled else "OFF"
+    print(f"[serve] DB save mode: {save_state}")
     print("[serve] http://0.0.0.0:8080")
     app.run(host="0.0.0.0", port=8080, debug=False, threaded=True, use_reloader=False)
 
 
 if __name__ == "__main__":
     import sys
-    if "save" in sys.argv[1:]:
-        reader_ssf.monitor.db_save_enabled = True
-        print("[serve] db_save ON")
+    if "nosave" in sys.argv[1:]:
+        reader_ssf.monitor.db_save_enabled = False
+        print("[serve] db_save OFF")
     start()

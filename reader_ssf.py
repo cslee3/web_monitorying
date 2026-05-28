@@ -34,14 +34,14 @@ MM_COLS = [
     (3,  "Change(%)",     _pct),
     (4,  "Amt(Mil)",      lambda v: _num(v, 0)),
     (5,  "Amt(Shr)",      lambda v: _num(v, 0)),
-    (6,  "MMQty",         lambda v: _num(v, 0)),
-    # cidx 7 = I열 (skip)
-    (8,  "Ask",           lambda v: _num(v, 0)),
-    (9,  "Bid",           lambda v: _num(v, 0)),
+    # cidx 6 = H열 차근월물 주식수 (Excel 숨김)
+    (7,  "Sprd Score",    lambda v: "" if (v is None or v == "") else (f"{int(round(float(v)*100))}%" if not _is_xl_error(v) else "")),  # I열, 정수 %
+    # cidx 8 = J열 Ask  (Excel 숨김)
+    # cidx 9 = K열 Bid  (Excel 숨김)
     (10, "MM Spread",     lambda v: str(v) if v else ""),
     (11, "Shares",        lambda v: _num(v, 0)),
     (12, "Diff",          lambda v: _num(v, 0)),
-    (13, "Vol(Lots)",     lambda v: _num(v, 0)),
+    # cidx 13 = N열 Vol(Lots) (Excel 숨김)
     (14, "Vol(Mil)",      lambda v: _num(v, 0)),
     (15, "Delta(Shr)",    lambda v: _num(v, 0)),
     (16, "Delta(Mil)",    lambda v: _num(v, 0)),
@@ -64,7 +64,6 @@ MM_COL_SUBS = {
     4:  "Amount (Mil KRW)",
     5:  "Amount (Shares)",
     11: "△Shares",
-    13: "Volume (Lots)",
     14: "Volume (Mkrw)",
     15: "Delta (Shares)",
     16: "Delta (Mil KRW)",
@@ -104,6 +103,8 @@ TOTAL_VALS = {"합계", "합 계", "Total", "소계"}
 # DB 저장 허용 시간대 (HH, MM)
 DB_SAVE_START = (9, 5)
 DB_SAVE_END   = (15, 20)
+# 일별 SQL 덤프 시각 (장 마감 후)
+DB_DUMP_TIME  = (15, 30)
 
 
 
@@ -228,6 +229,7 @@ def _read_section(all_vals, cols, pnl_cidx):
 
             cells[str(cidx)] = {
                 "v":     fval,
+                "raw":   raw,
                 "color": _pnl_color(cidx, raw, pnl_cidx),
                 "bg":    bg,
             }
@@ -259,8 +261,9 @@ class DashboardMonitor:
         self._clients      = []
         self._full_lock    = threading.Lock()
         self._full_data    = None
-        self.db_save_enabled = False
+        self.db_save_enabled = True
         self._db_conn        = None
+        self._dumped_date    = None   # 오늘 덤프 완료한 날짜
 
     def add_client(self):
         q = Queue(maxsize=200)
@@ -306,6 +309,12 @@ class DashboardMonitor:
         if main_sec is None:
             return
 
+        def _r(row, cidx):
+            """raw 값 우선 사용, 없으면 포매팅 값으로 fallback."""
+            cell = row.get(str(cidx), {})
+            raw  = cell.get("raw")
+            return _parse(raw) if raw is not None else _parse(cell.get("v"))
+
         rows_to_insert = []
         for row in main_sec["rows"]:
             stock = row.get("0", {}).get("v", "")
@@ -315,29 +324,26 @@ class DashboardMonitor:
                 ts,
                 stock,
                 row.get("1",  {}).get("v") or None,
-                _parse(row.get("2",  {}).get("v")),
-                _parse(row.get("3",  {}).get("v")),
-                _parse(row.get("4",  {}).get("v")),
-                _parse(row.get("5",  {}).get("v")),
-                _parse(row.get("6",  {}).get("v")),
-                _parse(row.get("8",  {}).get("v")),
-                _parse(row.get("9",  {}).get("v")),
+                _r(row, 2),
+                _r(row, 3),
+                _r(row, 4),
+                _r(row, 5),
+                _r(row, 7),   # sprd_score (I열)
                 row.get("10", {}).get("v") or None,
-                _parse(row.get("11", {}).get("v")),
-                _parse(row.get("12", {}).get("v")),
-                _parse(row.get("13", {}).get("v")),
-                _parse(row.get("14", {}).get("v")),
-                _parse(row.get("15", {}).get("v")),
-                _parse(row.get("16", {}).get("v")),
-                _parse(row.get("17", {}).get("v")),
-                _parse(row.get("18", {}).get("v")),
-                _parse(row.get("19", {}).get("v")),
-                _parse(row.get("20", {}).get("v")),
-                _parse(row.get("21", {}).get("v")),
-                _parse(row.get("22", {}).get("v")),
-                _parse(row.get("23", {}).get("v")),
-                _parse(row.get("24", {}).get("v")),
-                _parse(row.get("25", {}).get("v")),
+                _r(row, 11),
+                _r(row, 12),
+                _r(row, 14),
+                _r(row, 15),
+                _r(row, 16),
+                _r(row, 17),
+                _r(row, 18),
+                _r(row, 19),
+                _r(row, 20),
+                _r(row, 21),
+                _r(row, 22),
+                _r(row, 23),
+                _r(row, 24),
+                _r(row, 25),
             ))
 
         if not rows_to_insert:
@@ -348,16 +354,64 @@ class DashboardMonitor:
             cur.executemany("""
                 INSERT IGNORE INTO ssf_history
                 (ts, stock, stock_name, last_price, change_pct, amt_mil, amt_shr,
-                 mmqty, ask, bid, mm_spread, shares, diff, vol_lots, vol_mil,
+                 sprd_score, mm_spread, shares, diff, vol_mil,
                  delta_shr, delta_mil, theo_price, theo_basis,
                  ex1_bsp, ex1_ssp, ex2_basis, ex2_bsp, ex2_ssp, mtm_pnl, theo_pnl)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
             """, rows_to_insert)
             conn.commit()
             cur.close()
             print(f"[ssf_monitor] db saved {len(rows_to_insert)} rows  ts={ts:.3f}")
         except Exception as e:
             print(f"[ssf_monitor] db save error: {e}")
+            self._db_conn = None
+
+    def _dump_and_cleanup(self, dump_date):
+        """당일 ssf_history 데이터를 SQL 파일로 덤프하고 DB에서 삭제."""
+        day_start = datetime.datetime.combine(dump_date, datetime.time.min).timestamp()
+        day_end   = datetime.datetime.combine(
+            dump_date + datetime.timedelta(days=1), datetime.time.min
+        ).timestamp()
+
+        fname = os.path.join(BASE_DIR, f"ssf_history_{dump_date.strftime('%Y%m%d')}.sql")
+        try:
+            conn = self._get_db_conn()
+            cur  = conn.cursor()
+            cur.execute(
+                "SELECT * FROM ssf_history WHERE ts >= %s AND ts < %s ORDER BY ts",
+                (day_start, day_end),
+            )
+            rows = cur.fetchall()
+            cols = [d[0] for d in cur.description]
+
+            if rows:
+                def _sql_val(v):
+                    if v is None:               return "NULL"
+                    if isinstance(v, str):      return "'" + v.replace("'", "''") + "'"
+                    return str(v)
+
+                col_str = ", ".join(cols)
+                with open(fname, "w", encoding="utf-8") as f:
+                    f.write(f"-- ssf_history {dump_date}  ({len(rows)} rows)\n")
+                    f.write(f"INSERT INTO ssf_history ({col_str}) VALUES\n")
+                    lines = [
+                        "  (" + ", ".join(_sql_val(v) for v in row) + ")"
+                        for row in rows
+                    ]
+                    f.write(",\n".join(lines) + ";\n")
+
+                cur.execute(
+                    "DELETE FROM ssf_history WHERE ts >= %s AND ts < %s",
+                    (day_start, day_end),
+                )
+                conn.commit()
+                print(f"[ssf_monitor] dumped {len(rows)} rows → {fname}, DB 정리 완료")
+            else:
+                print(f"[ssf_monitor] dump 대상 없음 ({dump_date})")
+
+            cur.close()
+        except Exception as e:
+            print(f"[ssf_monitor] dump error: {e}")
             self._db_conn = None
 
     def _push(self, payload_str):
@@ -422,7 +476,7 @@ class DashboardMonitor:
                         self._full_data = data
                     prev_data = data
                     print("[ssf_monitor] initial load done")
-                    import time; time.sleep(1.0)
+                    time.sleep(1.0)
                     continue
 
                 changes = []
@@ -458,10 +512,14 @@ class DashboardMonitor:
                     print(f"[ssf_monitor] {now_str} — pushed {len(changes)} changes")
 
                 if self.db_save_enabled:
-                    now = datetime.datetime.now()
-                    in_window = DB_SAVE_START <= (now.hour, now.minute) <= DB_SAVE_END
-                    if in_window:
+                    now   = datetime.datetime.now()
+                    today = now.date()
+                    hhmm  = (now.hour, now.minute)
+                    if DB_SAVE_START <= hhmm <= DB_SAVE_END:
                         self._save_to_db(data, time.time())
+                    if hhmm >= DB_DUMP_TIME and self._dumped_date != today:
+                        self._dump_and_cleanup(today)
+                        self._dumped_date = today
 
                 prev_data = data
 
