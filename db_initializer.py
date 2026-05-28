@@ -100,7 +100,7 @@ def init_position(cur, conn):
         stock_price     BIGINT,
         dividend        DOUBLE,
         expiry          DATE,
-        strike          BIGINT,
+        strike          DOUBLE,
         multiplier      INT,
         fin_prev_price  DOUBLE,
         fin_curr_price  DOUBLE,
@@ -143,7 +143,7 @@ def init_position(cur, conn):
             to_val(row.iloc[10]),    # stock_price
             to_float(row.iloc[11]),  # dividend
             to_date(row.iloc[12]),   # expiry
-            to_val(row.iloc[13]),    # strike
+            to_float(row.iloc[13]),  # strike (DOUBLE — 소수점 행사가 허용)
             to_val(row.iloc[14]),    # multiplier
             to_float(row.iloc[15]),  # fin_prev_price
             to_float(row.iloc[16]),  # fin_curr_price
@@ -199,7 +199,7 @@ def init_prev_position(cur, conn):
         stock_price     BIGINT,
         dividend        DOUBLE,
         expiry          DATE,
-        strike          BIGINT,
+        strike          DOUBLE,
         multiplier      INT,
         fin_prev_price  DOUBLE,
         fin_curr_price  DOUBLE,
@@ -241,7 +241,7 @@ def init_prev_position(cur, conn):
             to_val(row.iloc[10]),    # stock_price
             to_float(row.iloc[11]),  # dividend
             to_date(row.iloc[12]),   # expiry
-            to_val(row.iloc[13]),    # strike
+            to_float(row.iloc[13]),  # strike (DOUBLE — 소수점 행사가 허용)
             to_val(row.iloc[14]),    # multiplier
             to_float(row.iloc[15]),  # fin_prev_price
             to_float(row.iloc[16]),  # fin_curr_price
@@ -318,6 +318,24 @@ if __name__ == "__main__":
     db = DBManager()
     conn = db.connect(database="market_making")
     cur  = conn.cursor()
+
+    # ── 테이블 삭제 (필요할 때 주석 해제) ──────────────────────────────────
+    # cur.execute("DROP TABLE IF EXISTS POSITION")
+    # cur.execute("DROP TABLE IF EXISTS PREV_POSITION")
+    # cur.execute("DROP TABLE IF EXISTS ssf_history")
+    # conn.commit()
+    # print("테이블 삭제 완료")
+    # ────────────────────────────────────────────────────────────────────────
+
+    # ── 사용자 권한 부여 (필요할 때 주석 해제) ──────────────────────────────
+    # user = "root"
+    # host = "10.115.31.100"                   # 접속 허용할 클라이언트 IP
+    # cur.execute(f"CREATE USER IF NOT EXISTS '{user}'@'{host}' IDENTIFIED BY ''")
+    # cur.execute(f"GRANT ALL PRIVILEGES ON *.* TO '{user}'@'{host}' WITH GRANT OPTION")
+    # cur.execute("FLUSH PRIVILEGES")
+    # conn.commit()
+    # print(f"권한 부여 완료: {user}@{host}")
+    # ────────────────────────────────────────────────────────────────────────
 
     init_position(cur, conn)
     init_prev_position(cur, conn)

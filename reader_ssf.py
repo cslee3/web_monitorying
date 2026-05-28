@@ -264,6 +264,9 @@ class DashboardMonitor:
         self.db_save_enabled = True
         self._db_conn        = None
         self._dumped_date    = None   # 오늘 덤프 완료한 날짜
+        self._last_status_ts = 0      # 마지막 상태 출력 시각
+        self._changes_since  = 0      # 마지막 상태 출력 이후 변경 건수
+        self._read_ok        = False  # 마지막 Excel 읽기 성공 여부
 
     def add_client(self):
         q = Queue(maxsize=200)
@@ -414,6 +417,50 @@ class DashboardMonitor:
             print(f"[ssf_monitor] dump error: {e}")
             self._db_conn = None
 
+    def _print_status(self):
+        now_str = datetime.datetime.now().strftime("%H:%M:%S")
+        issues  = []
+
+        # Excel 읽기 상태
+        xl_str = "Excel:OK" if self._read_ok else "Excel:ERR ⚠"
+        if not self._read_ok:
+            issues.append("Excel 읽기 실패")
+
+        # DB 상태
+        if not self.db_save_enabled:
+            db_str = "DB:OFF(nosave)"
+        else:
+            try:
+                conn = self._get_db_conn()
+                db_ok = conn.is_connected()
+            except Exception:
+                db_ok = False
+            if db_ok:
+                db_str = "DB:OK"
+            else:
+                db_str = "DB:ERR ⚠"
+                issues.append("MySQL 연결 안됨")
+
+        # SSE 클라이언트 수
+        with self._clients_lock:
+            n_clients = len(self._clients)
+
+        # 시스템 부하 (psutil 있으면)
+        load_str = ""
+        try:
+            import psutil
+            cpu = psutil.cpu_percent(interval=None)
+            mem = psutil.virtual_memory().percent
+            load_str = f" | CPU:{cpu:.0f}% MEM:{mem:.0f}%"
+        except ImportError:
+            pass
+
+        changes = self._changes_since
+        self._changes_since = 0
+
+        status = "OK" if not issues else " / ".join(issues)
+        print(f"[status] {now_str} | {xl_str} | {db_str} | 클라이언트:{n_clients} | 변경:{changes}건/30s{load_str} | {status}")
+
     def _push(self, payload_str):
         with self._clients_lock:
             dead = []
@@ -469,12 +516,17 @@ class DashboardMonitor:
                 if ws is None:
                     ws = self._get_ws()
                 data    = self._read_full(ws)
+                self._read_ok = True
                 now_str = datetime.datetime.now().strftime("%H:%M:%S")
 
                 if prev_data is None:
                     with self._full_lock:
                         self._full_data = data
                     prev_data = data
+                    # 시작 시점이 덤프 시각 이후면 오늘 덤프 건너뜀
+                    _now = datetime.datetime.now()
+                    if (_now.hour, _now.minute) >= DB_DUMP_TIME:
+                        self._dumped_date = _now.date()
                     print("[ssf_monitor] initial load done")
                     time.sleep(1.0)
                     continue
@@ -508,8 +560,14 @@ class DashboardMonitor:
                 with self._full_lock:
                     self._full_data = data
                 self._push(json.dumps({"cells": changes, "updated": now_str}))
+                self._changes_since += len(changes)
                 if changes:
                     print(f"[ssf_monitor] {now_str} — pushed {len(changes)} changes")
+
+                # 30초마다 상태 출력
+                if time.time() - self._last_status_ts >= 30:
+                    self._print_status()
+                    self._last_status_ts = time.time()
 
                 if self.db_save_enabled:
                     now   = datetime.datetime.now()
@@ -526,14 +584,15 @@ class DashboardMonitor:
             except pywintypes.com_error as e:
                 hresult = e.args[0] if e.args else 0
                 if hresult in _COM_BUSY:
-                    # DDE/VBA 실행 중 — ws 유지하고 잠시 대기
                     time.sleep(0.5)
                     continue
                 print(f"[ssf_monitor] com_error: {e}")
+                self._read_ok = False
                 prev_data = None
                 ws        = None
             except Exception as e:
                 print(f"[ssf_monitor] error: {e}")
+                self._read_ok = False
                 prev_data = None
                 ws        = None
 

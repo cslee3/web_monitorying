@@ -110,6 +110,53 @@ def static_files(filename):
     return resp
 
 
+# ── 시작 시 DB 스냅샷 테스트 ────────────────────────────────────────────────
+
+def _dump_test():
+    """서버 시작 시 ssf_history 전체를 ssf_history_test.sql로 덤프. DB 상태 확인용."""
+    try:
+        from db_manager import DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME
+        import mysql.connector, os, datetime
+        conn = mysql.connector.connect(
+            host=DB_HOST, port=DB_PORT,
+            user=DB_USER, password=DB_PASSWORD,
+            database=DB_NAME, charset="utf8mb4",
+            connection_timeout=3,
+        )
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM ssf_history ORDER BY ts")
+        rows = cur.fetchall()
+        cols = [d[0] for d in cur.description]
+        cur.close()
+        conn.close()
+
+        if not rows:
+            print("[serve] ssf_history 비어있음 — test dump 생략")
+            return
+
+        def _v(v):
+            if v is None:          return "NULL"
+            if isinstance(v, str): return "'" + v.replace("'", "''") + "'"
+            return str(v)
+
+        out = os.path.join(BASE_DIR, "ssf_history_test.sql")
+        col_str = ", ".join(cols)
+        with open(out, "w", encoding="utf-8") as f:
+            f.write(f"-- ssf_history test dump  {datetime.datetime.now():%Y-%m-%d %H:%M:%S}  ({len(rows):,} rows)\n")
+            f.write(f"INSERT INTO ssf_history ({col_str}) VALUES\n")
+            lines = ["  (" + ", ".join(_v(v) for v in row) + ")" for row in rows]
+            f.write(",\n".join(lines) + ";\n")
+
+        first_ts = rows[0][0]
+        last_ts  = rows[-1][0]
+        print(f"[serve] test dump → ssf_history_test.sql  {len(rows):,}행"
+              f"  ({datetime.datetime.fromtimestamp(first_ts):%H:%M:%S}"
+              f" ~ {datetime.datetime.fromtimestamp(last_ts):%H:%M:%S})")
+
+    except Exception as e:
+        print(f"[serve] test dump 실패 (DB 꺼짐?): {e}")
+
+
 # ── 서버 시작 ─────────────────────────────────────────────────────────────
 
 def start():
@@ -125,6 +172,7 @@ def start():
     threading.Thread(target=reader_sso.monitor.run, daemon=True).start()
     save_state = "ON" if reader_ssf.monitor.db_save_enabled else "OFF"
     print(f"[serve] DB save mode: {save_state}")
+    _dump_test()
     print("[serve] http://0.0.0.0:8080")
     app.run(host="0.0.0.0", port=8080, debug=False, threaded=True, use_reloader=False)
 
