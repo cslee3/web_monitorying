@@ -30,9 +30,6 @@
   td { padding: 2px 8px; border: 1px solid #e0e0e0; font-size: 12px; }
   tr:hover td { background: #fffde7 !important; }
 
-  .pnl-green { color: #1a7c34; }
-  .pnl-red   { color: #cc0000; }
-
   /* ── 요약 섹션 ────────────────────────────────────────── */
   #summarySection { padding: 8px 10px 0; }
 
@@ -313,10 +310,8 @@ function renderDetail(code) {
 
     html += `<tr class="${cls}">`;
     for (const [cidx, , align] of DETAIL_HDRS) {
-      const cell = row.cells[String(cidx)] || { v: "", color: "" };
-      const cc   = cell.color === "green" ? "pnl-green"
-                 : cell.color === "red"   ? "pnl-red" : "";
-      html += `<td class="${cc}" style="text-align:${align}">${cell.v}</td>`;
+      const cell = row.cells[String(cidx)] || { v: "" };
+      html += `<td style="text-align:${align}">${cell.v}</td>`;
     }
     html += `</tr>`;
   }

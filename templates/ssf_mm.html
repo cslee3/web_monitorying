@@ -40,9 +40,6 @@
   .sep-row td { background: #f0f0f0; height: 5px; padding: 0; border: none; }
 
 
-  .pnl-green { color: #1a7c34; }
-  .pnl-red   { color: #cc0000; }
-
   /* .dim-row td { background: #d8e6f5; } */
   /* .dim-row td:first-child { border-left: 3px solid #7bafd4; } */
   /* .dim-row:hover td { background: #fffde7 !important; } */
@@ -101,18 +98,20 @@ const DIM_STOCKS = new Set([
   "010950", // S-Oil
   "086280", // 현대글로비스
   "003230", // 삼양식품
+  "010060", // OCI홀딩스
   "008770", // 호텔신라
   "010130", // 고려아연
   "001800", // 오리온홀딩스
   "166090", // 하나머티리얼즈
   "108490", // 로보티즈
   "033780", // KT&G
+  "011200", // HMM
 ]);
 
 let filterMode = 0; // 0=전체, 1=DIM만, 2=비DIM만
 
-// stripe 배경 제외 컬럼: ColorScale(F/Q/R/AA) + MM Spread Alert + Ex1/Ex2 Spread
-const STRIPE_SKIP_CIDX = new Set([4, 10, 15, 16, 19, 20, 22, 23, 25]);
+// stripe 배경 제외 컬럼: ColorScale(F/R/S/AB) + MM Spread Alert + Ex1/Ex2 Spread
+const STRIPE_SKIP_CIDX = new Set([4, 10, 16, 17, 20, 21, 23, 24, 26]);
 
 function setStripe(tr, isOdd) {
   tr.querySelectorAll("td").forEach((td, i) => {
@@ -175,7 +174,7 @@ async function loadFull() {
 }
 
 function buildTable(d) {
-  // MM sections only (main / sum1 / sum2) — idx는 ssfo_idx.html에서 표시
+  // MM sections only (main / sum1 / sum2) — idx는 ssf_mm2.html에서 표시
   const mmSections = d.sections.filter(s => !s.raw);
   const firstSec   = mmSections[0];
 
@@ -236,8 +235,8 @@ function buildTable(d) {
   if (tw) { tw.scrollLeft = savedLeft; tw.scrollTop = savedTop; }
 }
 
-// F=4, Q=15, R=16, AA=25 — ColorScale 그라디언트 적용 컬럼
-const CS_CIDX = new Set([4, 15, 16, 25]);
+// F=4, R=16, S=17, AB=26 — ColorScale 그라디언트 적용 컬럼
+const CS_CIDX = new Set([4, 16, 17, 26]);
 
 // 주식 호가 틱 단위 (common.py STOCK_TICK_TABLE 동일)
 function getStockTick(price) {
@@ -250,7 +249,7 @@ function getStockTick(price) {
   return 1000;
 }
 
-const SPREAD_CIDX = new Set([19, 20, 22, 23]);
+const SPREAD_CIDX = new Set([20, 21, 23, 24]);
 
 function spreadStyle(sp, lastPrice) {
   const tick = getStockTick(lastPrice);
@@ -290,9 +289,7 @@ function makeTd(sid, ri, cidx, cell, lastPrice) {
     if (s.fw)    styles.push(`font-weight:${s.fw}`);
   }
 
-  const colorCls = cell.color === "green" ? "pnl-green"
-                 : cell.color === "red"   ? "pnl-red" : "";
-  return `<td id="c-${sid}-${ri}-${cidx}" class="${colorCls}" style="${styles.join(";")}">${cell.v}</td>`;
+  return `<td id="c-${sid}-${ri}-${cidx}" style="${styles.join(";")}">${cell.v}</td>`;
 }
 
 function connectStream() {
@@ -329,7 +326,7 @@ function applyChanges(cells, updated) {
     const ri   = parts[1];
     const cidx = Number(parts[2]);
 
-    // ssfo_pnl.html은 MM 섹션만 처리
+    // ssf_mm.html은 MM 섹션만 처리
     if (sid.startsWith("idx")) continue;
 
     const td = document.getElementById(`c-${sid}-${ri}-${cidx}`);
@@ -361,10 +358,6 @@ function applyChanges(cells, updated) {
       const lastPrice = lpTd ? parseFloat(lpTd.textContent.replace(/,/g, "")) || 0 : 0;
       applySpreadStyle(td, parseFloat(v.replace(/,/g, "")) || 0, lastPrice);
     }
-
-    td.classList.remove("pnl-green", "pnl-red");
-    if (color === "green") td.classList.add("pnl-green");
-    else if (color === "red") td.classList.add("pnl-red");
 
   }
 

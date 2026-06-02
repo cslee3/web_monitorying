@@ -57,11 +57,12 @@ def _pct(v):
 
 
 def _num(v, d=0):
-    """숫자 → 천단위 콤마 + 소수점 d자리. ex) 1234567.8 → '1,234,568'"""
+    """숫자 → 천단위 콤마 + 소수점 d자리. 0이면 '-'. ex) 1234567.8 → '1,234,568'"""
     if v is None or v == "": return ""
     if _is_xl_error(v): return ""
-    try: return f"{v:,.{d}f}"
-    except: return str(v)
+    if not isinstance(v, (int, float)) or isinstance(v, bool): return str(v)
+    if v == 0: return "-"
+    return f"{v:,.{d}f}"
 
 
 def _date(v):

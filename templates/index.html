@@ -147,9 +147,9 @@
         <a onclick="goHome()" class="home-link">Home</a>
       </h2>
       <h2 style="color:#FFB347;">Market Making</h2>
-      <a onclick="loadPage('ssfo_pnl.html', 'SSF MM')">SSF MM</a>
-      <a onclick="loadPage('ssfo_idx.html', 'SSF MM2')">SSF MM2</a>
-      <a onclick="loadPage('sso_report.html', 'SSO MM')">SSO MM</a>
+      <a onclick="loadPage('ssf_mm.html', 'SSF MM')">SSF MM</a>
+      <a onclick="loadPage('ssf_mm2.html', 'SSF MM2')">SSF MM2</a>
+      <a onclick="loadPage('sso_mm.html', 'SSO MM')">SSO MM</a>
       <a onclick="loadPage('ssfo_score.html', 'MM Score')">MM Score</a>
       <h2></h2>
       <h2 style="color:#FFB347;">Arb Trading</h2>
@@ -184,19 +184,44 @@
 
     function loadArchivePage() {
       const dp = document.getElementById("datePicker");
-      if (dp && currentPage) {
-        // yyyy-mm-dd → yyyymmdd 로 변환
-        const dateStr = dp.value.replace(/-/g, "");  
+      if (!dp || !currentPage) return;
 
-        const pageName = currentPage.replace('.html',''); 
-        document.getElementById("mainFrame").src = `archive/${pageName}_${dateStr}.html`;
+      const dateStr = dp.value.replace(/-/g, "");
+      const _t = new Date();
+      const today = String(_t.getFullYear()) +
+                    String(_t.getMonth() + 1).padStart(2, "0") +
+                    String(_t.getDate()).padStart(2, "0");
 
-        // 날짜 기반 페이지를 불러오면 자동 새로고침 중단
-        if (autoRefreshId) {
-          clearInterval(autoRefreshId);
-          autoRefreshId = null;
-        }
+      // 자동 새로고침 중단
+      if (autoRefreshId) { clearInterval(autoRefreshId); autoRefreshId = null; }
+
+      // 오늘 날짜면 라이브 페이지
+      if (!dateStr || dateStr === today) {
+        loadPage(currentPage, document.getElementById("pageTitle")?.textContent || "");
+        return;
       }
+
+      const pageName = currentPage.replace(".html", "");
+      const archiveUrl = `archive/${pageName}_${dateStr}.html`;
+
+      fetch(archiveUrl, { method: "HEAD" })
+        .then(res => {
+          if (res.ok) {
+            const f = document.getElementById("mainFrame");
+            f.removeAttribute("srcdoc");
+            f.src = archiveUrl;
+          } else {
+            const msg = `<html><body style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:'Segoe UI',sans-serif;color:#888;font-size:16px">` +
+                        `해당 일자 데이터가 없습니다 (${dp.value})</body></html>`;
+            document.getElementById("mainFrame").src = "about:blank";
+            document.getElementById("mainFrame").srcdoc = msg;
+          }
+        })
+        .catch(() => {
+          document.getElementById("mainFrame").srcdoc =
+            `<html><body style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:'Segoe UI',sans-serif;color:#888;font-size:16px">` +
+            `서버 연결 오류</body></html>`;
+        });
     }
 
     function showMainApp() {
@@ -207,6 +232,7 @@
     function loadPage(page, title) {
       currentPage = page;
       const iframe = document.getElementById("mainFrame");
+      iframe.removeAttribute("srcdoc");
       iframe.src = `${page}?_=${Date.now()}`;
 
       const titleEl = document.getElementById("pageTitle");
@@ -218,15 +244,17 @@
       links.forEach(link => link.classList.remove("active")); // 기존 active 제거
       event.target.classList.add("active"); // 현재 클릭한 메뉴만 active 추가
 
-      // 달력(datePicker) 초기화 → 오늘 날짜로 설정
+      // 달력(datePicker) 초기화 → 오늘 날짜로 설정 (로컬 날짜 기준)
       const dp = document.getElementById("datePicker");
       if (dp) {
-        const todayStr = new Date().toISOString().slice(0,10); // yyyy-mm-dd
-        dp.value = todayStr;
+        const _n = new Date();
+        dp.value = String(_n.getFullYear()) + "-" +
+                   String(_n.getMonth() + 1).padStart(2, "0") + "-" +
+                   String(_n.getDate()).padStart(2, "0");
       }
 
       // SSF MM만 축소 표시
-      if (page === "ssfo_pnl.html") {
+      if (page === "ssf_mm.html") {
         iframe.classList.add("ssfmm");
       } else {
         iframe.classList.remove("ssfmm");
@@ -251,28 +279,6 @@
       }
       showMainApp();      
     };
-
-    function goHome() {
-      currentPage = "";
-      const iframe = document.getElementById("mainFrame");
-      iframe.src = ""; // iframe 비우기
-
-      // 상단 타이틀 초기화
-      const titleEl = document.getElementById("pageTitle");
-      if (titleEl) {
-        titleEl.textContent = "Multi Asset Webpage";
-      }
-
-      // 사이드바 active 초기화
-      const links = document.querySelectorAll(".sidebar a");
-      links.forEach(link => link.classList.remove("active"));
-
-      // 자동 새로고침 중지
-      if (autoRefreshId) {
-        clearInterval(autoRefreshId);
-        autoRefreshId = null;
-      }
-    }
 
     function goHome() {
       currentPage = "";

@@ -45,9 +45,6 @@
   .total-row td { background: #e2efda !important; font-weight: bold; }
 
 
-  .pnl-green { color: #1a7c34; }
-  .pnl-red   { color: #cc0000; }
-
   #status { padding: 40px; text-align: center; color: #888; font-size: 14px; }
 </style>
 </head>
@@ -109,17 +106,28 @@ function buildTables(d) {
     let theadHtml = "";
     let startRow  = 0;
     if (sec.has_header) {
-      theadHtml = "<thead><tr>" + rows[0].map(v => `<th>${v}</th>`).join("") + "</tr></thead>";
+      theadHtml = "<thead><tr>" + rows[0].map(cell => `<th>${cell.v}</th>`).join("") + "</tr></thead>";
       startRow  = 1;
     } else if (sec.header) {
       theadHtml = "<thead><tr>" + sec.header.map(v => `<th>${v}</th>`).join("") + "</tr></thead>";
     }
 
+    const isIdx7 = sec.id === "idx7";
+    const SUBHDR_VALS = new Set(["△Amount", "Strike", "Theo PnL", "MTM PnL"]);
     let tbody = "";
     for (let ri = startRow; ri < rows.length; ri++) {
-      tbody += "<tr>" + rows[ri].map((v, ci) =>
-        `<td id="c-${sec.id}-${ri}-${ci}">${v}</td>`
-      ).join("") + "</tr>";
+      const row = rows[ri];
+      tbody += "<tr>" + row.map((cell, ci) => {
+        const v     = cell.v;
+        const bg    = cell.bg || "";
+        const alert = ci === 0 && v === "Alert";
+        let style   = "";
+        if (sec.id === "idx5" && SUBHDR_VALS.has(v)) style = "background:#202123;color:#fff;font-weight:bold";
+        else if (isIdx7 && ci === 0) style = "background:#202123;color:#fff;font-weight:bold";
+        else if (alert)         style = "background:#ffff00;color:#cc0000;font-weight:bold";
+        else if (bg)            style = `background:${bg}`;
+        return `<td id="c-${sec.id}-${ri}-${ci}"${style ? ` style="${style}"` : ""}>${v}</td>`;
+      }).join("") + "</tr>";
     }
 
     html += `<div class="table-section"><table>${theadHtml}<tbody>${tbody}</tbody></table></div>`;
@@ -159,7 +167,7 @@ function connectStream() {
 function applyChanges(cells, updated) {
   document.getElementById("hUpdated").textContent = updated;
 
-  for (const { key, v } of cells) {
+  for (const { key, v, bg } of cells) {
     // raw 섹션 key: "idx1_2_3" (sid_ri_ci)
     if (!key.startsWith("idx")) continue;
     const parts = key.split("_");
@@ -171,6 +179,20 @@ function applyChanges(cells, updated) {
     if (!td) continue;
 
     td.textContent = v;
+
+    if (Number(ci) === 0) {
+      if (v === "Alert") {
+        td.style.background = "#ffff00";
+        td.style.color      = "#cc0000";
+        td.style.fontWeight = "bold";
+      } else {
+        td.style.background = "";
+        td.style.color      = "";
+        td.style.fontWeight = "";
+      }
+    } else {
+      td.style.background = bg || "";
+    }
   }
 
   const dot = document.getElementById("liveDot");

@@ -100,6 +100,15 @@ def api_db_save_toggle():
 
 # ── 정적 파일 ─────────────────────────────────────────────────────────────
 
+ARCHIVE_DIR = os.path.join(BASE_DIR, "archive")
+
+@app.route("/archive/<path:filename>")
+def archive_files(filename):
+    resp = send_from_directory(ARCHIVE_DIR, filename)
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
+
+
 @app.route("/<path:filename>")
 def static_files(filename):
     if filename.endswith(".html"):

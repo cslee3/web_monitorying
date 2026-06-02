@@ -9,7 +9,7 @@ reader_ssf.py — DashBoard 탭 실시간 모니터 (SSF MM / SSF MM2)
 섹션 구성:
   main : B5:AA36  — SSF MM 개별 종목
   sum1 : B38:AA40 — SSF MM 소계/합계 (1단)
-  sum2 : B42:AA43 — SSF MM 합계 (2단)
+  sum2 : B42:AA44 — SSF MM 합계 (2단)
   idx  : AC5:AI36 — SSF MM2 지수 정보
 """
 
@@ -39,23 +39,23 @@ MM_COLS = [
     # cidx 8 = J열 Ask  (Excel 숨김)
     # cidx 9 = K열 Bid  (Excel 숨김)
     (10, "MM Spread",     lambda v: str(v) if v else ""),
-    (11, "Shares",        lambda v: _num(v, 0)),
-    (12, "Diff",          lambda v: _num(v, 0)),
-    # cidx 13 = N열 Vol(Lots) (Excel 숨김)
-    (14, "Vol(Mil)",      lambda v: _num(v, 0)),
-    (15, "Delta(Shr)",    lambda v: _num(v, 0)),
-    (16, "Delta(Mil)",    lambda v: _num(v, 0)),
-    (17, "Theo Price",    lambda v: _num(v, 0)),
-    (18, "Theo Basis",    lambda v: _num(v, 0)),
-    (19, "Ex1 B-Sp",      lambda v: _num(v, 0)),
-    (20, "Ex1 S-Sp",      lambda v: _num(v, 0)),
-    (21, "Ex2 Basis",     lambda v: _num(v, 0)),
-    (22, "Ex2 B-Sp",      lambda v: _num(v, 0)),
-    (23, "Ex2 S-Sp",      lambda v: _num(v, 0)),
-    (24, "MTM PnL",       lambda v: _num(v, 0)),
-    (25, "Theo PnL",      lambda v: _num(v, 0)),
+    (11, "Volume Score",  lambda v: _num(v, 2)),
+    (12, "Shares",        lambda v: _num(v, 0)),
+    (13, "Diff",          lambda v: _num(v, 0)),
+    # cidx 14 = O열 Vol(Lots) (Excel 숨김)
+    (15, "Vol(Mil)",      lambda v: _num(v, 0)),
+    (16, "Delta(Shr)",    lambda v: _num(v, 0)),
+    (17, "Delta(Mil)",    lambda v: _num(v, 0)),
+    (18, "Theo Price",    lambda v: _num(v, 0)),
+    (19, "Theo Basis",    lambda v: _num(v, 0)),
+    (20, "Ex1 B-Sp",      lambda v: _num(v, 0)),
+    (21, "Ex1 S-Sp",      lambda v: _num(v, 0)),
+    (22, "Ex2 Basis",     lambda v: _num(v, 0)),
+    (23, "Ex2 B-Sp",      lambda v: _num(v, 0)),
+    (24, "Ex2 S-Sp",      lambda v: _num(v, 0)),
+    (25, "MTM PnL",       lambda v: _num(v, 0)),
+    (26, "Theo PnL",      lambda v: _num(v, 0)),
 ]
-MM_PNL_CIDX = {c[0] for c in MM_COLS if "PnL" in c[1]} - {24, 25}  # MTM PnL, Theo PnL 글자색 제외
 MM_NUM_CIDX  = {c[0] for c in MM_COLS if c[0] not in (0, 1, 10)}
 
 # 컬럼 헤더 두 번째 줄 (단축명과 다른 경우만)
@@ -63,15 +63,15 @@ MM_COL_SUBS = {
     3:  "Change (%)",
     4:  "Amount (Mil KRW)",
     5:  "Amount (Shares)",
-    11: "△Shares",
-    14: "Volume (Mkrw)",
-    15: "Delta (Shares)",
-    16: "Delta (Mil KRW)",
-    19: "Ex1 B-Spread",
-    20: "Ex1 S-Spread",
-    21: "Theo Basis",
-    22: "Ex2 B-Spread",
-    23: "Ex2 S-Spread",
+    12: "△Shares",
+    15: "Volume (Mkrw)",
+    16: "Delta (Shares)",
+    17: "Delta (Mil KRW)",
+    20: "Ex1 B-Spread",
+    21: "Ex1 S-Spread",
+    22: "Theo Basis",
+    23: "Ex2 B-Spread",
+    24: "Ex2 S-Spread",
 }
 
 # ── 섹션 정의 — B2:AK44 단일 bulk read 기준 (COM 호출 통합) ──────────
@@ -86,16 +86,17 @@ MM_SECTIONS = [
 ]
 
 # IDX2 섹션 (has_header: True면 첫 번째 행을 헤더로 처리)
+# text_ci: 문자열 그대로 표시할 relative column index (숫자 포맷 제외)
 IDX2_SECTIONS = [
-    {"id": "idx1", "row_s":  3, "row_e":  9, "col_s": 29, "col_e": 35, "has_header": True},   # AE5:AK11
-    {"id": "idx2", "row_s": 11, "row_e": 11, "col_s": 29, "col_e": 30, "has_header": False},  # AE13:AF13
-    {"id": "idx3", "row_s": 12, "row_e": 13, "col_s": 29, "col_e": 35, "has_header": False,
-     "header": ["IdxCode", "IndexName", "Fund", "Delta", "Volume", "MTM PnL", "Theo PnL"]},  # AE14:AK15
-    {"id": "idx4", "row_s": 15, "row_e": 16, "col_s": 29, "col_e": 35, "has_header": False,
-     "header": ["IdxCode", "IndexName", "Fund", "Delta", "Volume", "MTM PnL", "Theo PnL"]},  # AE17:AK18
-    {"id": "idx5", "row_s": 18, "row_e": 23, "col_s": 29, "col_e": 35, "has_header": True},   # AE20:AK25
-    {"id": "idx6", "row_s": 27, "row_e": 36, "col_s": 29, "col_e": 35, "has_header": True},   # AE29:AK38
-    {"id": "idx7", "row_s": 41, "row_e": 42, "col_s": 32, "col_e": 34, "has_header": False},  # AH43:AJ44
+    {"id": "idx1", "row_s":  3, "row_e":  9, "col_s": 30, "col_e": 36, "has_header": True,  "text_ci": {0, 1, 2}},  # AF5:AL11
+    {"id": "idx2", "row_s": 11, "row_e": 11, "col_s": 30, "col_e": 31, "has_header": False, "text_ci": {0, 1}, "empty_dash": True},  # AF13:AG13
+    {"id": "idx3", "row_s": 12, "row_e": 13, "col_s": 30, "col_e": 36, "has_header": False, "text_ci": {0, 1, 2},
+     "header": ["IdxCode", "IndexName", "Fund", "Delta", "Volume", "MTM PnL", "Theo PnL"]},                           # AF14:AL15
+    {"id": "idx4", "row_s": 15, "row_e": 16, "col_s": 30, "col_e": 36, "has_header": False, "text_ci": {0, 1, 2},
+     "header": ["IdxCode", "IndexName", "Fund", "Delta", "Volume", "MTM PnL", "Theo PnL"]},                           # AF17:AL18
+    {"id": "idx5", "row_s": 18, "row_e": 23, "col_s": 30, "col_e": 36, "has_header": True,  "text_ci": {0, 1, 2}, "colorscale": False},  # AF20:AL25
+    {"id": "idx6", "row_s": 27, "row_e": 36, "col_s": 30, "col_e": 36, "has_header": True,  "text_ci": {0, 1, 2}, "theo_pnl_rci": 5, "skip_rows": {35}},  # AF29:AL38 (row35=Excel37 빈행 스킵)
+    {"id": "idx7", "row_s": 42, "row_e": 42, "col_s": 33, "col_e": 35, "has_header": False, "text_ci": {0}, "skip_rci": {1}},  # AI44:AK44 (AJ 빈 열 스킵)
 ]
 
 TOTAL_VALS = {"합계", "합 계", "Total", "소계"}
@@ -109,16 +110,26 @@ DB_DUMP_TIME  = (15, 30)
 
 
 # ColorScale 그라디언트 적용 컬럼 (cidx 기준)
-# F=4(Amt Mil), Q=15(Delta Shr), R=16(Delta Mil), AA=25(Theo PnL)
-COLORSCALE_CIDX = {4, 15, 16, 25}
+# F=4(Amt Mil), R=16(Delta Shr), S=17(Delta Mil), AB=26(Theo PnL)
+COLORSCALE_CIDX = {4, 16, 17, 26}
 
 # cidx → 스케일 기준 cidx (값도 기준 컬럼에서 가져옴)
-# Delta(Shr) cidx15 는 Delta(Mil) cidx16 기준으로 색상 결정
-COLORSCALE_REF = {15: 16}
+# Delta(Shr) cidx16 는 Delta(Mil) cidx17 기준으로 색상 결정
+COLORSCALE_REF = {16: 17}
 
+
+def _raw_str(v):
+    """Excel raw 값 → 문자열. 숫자도 그대로 str 변환 (텍스트 컬럼용)."""
+    if v is None or v == "": return ""
+    if isinstance(v, (int, float)) and not isinstance(v, bool):
+        if _is_xl_error(v): return ""
+        return str(int(round(v)))
+    s = str(v)
+    if s.startswith("#"): return ""
+    return s
 
 def _raw(v):
-    """Excel raw 값 → 문자열. 그대로 표시용.
+    """Excel raw 값 → 문자열. 숫자는 천단위 콤마, 0은 '-'.
     #BLOCKED! / #VALUE! 등 Excel 에러값은 빈 문자열로 처리.
     """
     if v is None or v == "": return ""
@@ -126,7 +137,7 @@ def _raw(v):
         return v.strftime("%H:%M:%S") if v.date() == datetime.date.today() else v.strftime("%Y-%m-%d %H:%M:%S")
     if isinstance(v, (int, float)) and not isinstance(v, bool):
         if _is_xl_error(v): return ""
-        return str(int(round(v)))
+        return _num(v, 0)
     s = str(v)
     if s.startswith("#"): return ""   # #BLOCKED!, #VALUE!, #REF!, #N/A 등
     return s
@@ -137,7 +148,7 @@ def _read_mm(bulk):
     cols = [(c[0], c[1], MM_COL_SUBS.get(c[0], "")) for c in MM_COLS]
     sections = []
     for sec in MM_SECTIONS:
-        rows, meta = _read_section(bulk[sec["row_s"]: sec["row_e"] + 1], MM_COLS, MM_PNL_CIDX)
+        rows, meta = _read_section(bulk[sec["row_s"]: sec["row_e"] + 1], MM_COLS)
         sections.append({
             "id":       sec["id"],
             "cols":     cols,
@@ -148,17 +159,51 @@ def _read_mm(bulk):
     return sections
 
 
+_IDX2_THEO_PNL_RCI = 6   # 7열 섹션에서 Theo PnL의 relative column index
+
 def _read_idx2(bulk):
-    """B2:AK44 bulk 데이터 → IDX2_SECTIONS 슬라이싱 → raw 2D 배열 반환."""
+    """B2:AL44 bulk 데이터 → IDX2_SECTIONS 슬라이싱 → {v, bg} 2D 배열 반환."""
     sections = []
     ncols = len(bulk[0]) if bulk else 0
     for sec in IDX2_SECTIONS:
+        text_ci      = sec.get("text_ci", set())
+        skip_rci     = sec.get("skip_rci", set())
+        skip_rows    = sec.get("skip_rows", set())
+        empty_dash   = sec.get("empty_dash", False)
+        ncol_sec     = sec["col_e"] - sec["col_s"] + 1
+        has_theo     = ncol_sec == 7 and sec.get("colorscale", True)
+        theo_pnl_rci = sec.get("theo_pnl_rci", _IDX2_THEO_PNL_RCI)
+
+        # Theo PnL colorscale 사전 계산 (헤더 행 제외)
+        theo_rank = {}
+        if has_theo:
+            theo_ci = sec["col_s"] + theo_pnl_rci
+            start   = 1 if sec["has_header"] else 0
+            vals    = []
+            for row_data in bulk[sec["row_s"] + start: sec["row_e"] + 1]:
+                if row_data is None: continue
+                v = row_data[theo_ci] if theo_ci < len(row_data) else None
+                if isinstance(v, (int, float)) and not isinstance(v, bool) and not _is_xl_error(v):
+                    vals.append(float(v))
+            theo_rank = _colorscale_rank(vals)
+
         rows = []
-        for row_data in bulk[sec["row_s"]: sec["row_e"] + 1]:
+        for abs_ri, row_data in enumerate(bulk[sec["row_s"]: sec["row_e"] + 1], start=sec["row_s"]):
+            if abs_ri in skip_rows:
+                continue
             if row_data is None:
                 row_data = [None] * ncols
-            row = [_raw(row_data[ci]) if ci < len(row_data) else ""
-                   for ci in range(sec["col_s"], sec["col_e"] + 1)]
+            row = []
+            for rci, ci in enumerate(range(sec["col_s"], sec["col_e"] + 1)):
+                if rci in skip_rci:
+                    continue
+                raw_v = row_data[ci] if ci < len(row_data) else None
+                val   = _raw_str(raw_v) if rci in text_ci else _raw(raw_v)
+                if empty_dash and val == "": val = "-"
+                bg    = ""
+                if has_theo and rci == theo_pnl_rci and isinstance(raw_v, (int, float)) and not isinstance(raw_v, bool) and not _is_xl_error(raw_v):
+                    bg = theo_rank.get(float(raw_v), "")
+                row.append({"v": val, "bg": bg})
             rows.append(row)
         sections.append({
             "id":         sec["id"],
@@ -170,13 +215,7 @@ def _read_idx2(bulk):
     return sections
 
 
-def _pnl_color(cidx, raw, pnl_cidx):
-    if cidx not in pnl_cidx or raw is None: return ""
-    try: return "green" if float(raw) > 0 else ("red" if float(raw) < 0 else "")
-    except: return ""
-
-
-def _read_section(all_vals, cols, pnl_cidx):
+def _read_section(all_vals, cols):
     """raw Excel 2D 튜플을 섹션 rows / row_meta 로 변환."""
     rows, row_meta = [], []
     ncols = len(all_vals[0]) if all_vals else 0
@@ -228,10 +267,9 @@ def _read_section(all_vals, cols, pnl_cidx):
                     bg = ""
 
             cells[str(cidx)] = {
-                "v":     fval,
-                "raw":   raw,
-                "color": _pnl_color(cidx, raw, pnl_cidx),
-                "bg":    bg,
+                "v":   fval,
+                "raw": raw,
+                "bg":  bg,
             }
 
         if not any_val:
@@ -264,6 +302,9 @@ class DashboardMonitor:
         self.db_save_enabled = True
         self._db_conn        = None
         self._dumped_date    = None   # 오늘 덤프 완료한 날짜
+        self._last_status_ts = 0      # 마지막 상태 출력 시각
+        self._changes_since  = 0      # 마지막 상태 출력 이후 변경 건수
+        self._read_ok        = False  # 마지막 Excel 읽기 성공 여부
 
     def add_client(self):
         q = Queue(maxsize=200)
@@ -330,9 +371,9 @@ class DashboardMonitor:
                 _r(row, 5),
                 _r(row, 7),   # sprd_score (I열)
                 row.get("10", {}).get("v") or None,
-                _r(row, 11),
+                _r(row, 11),  # vol_score
                 _r(row, 12),
-                _r(row, 14),
+                _r(row, 13),
                 _r(row, 15),
                 _r(row, 16),
                 _r(row, 17),
@@ -344,6 +385,7 @@ class DashboardMonitor:
                 _r(row, 23),
                 _r(row, 24),
                 _r(row, 25),
+                _r(row, 26),
             ))
 
         if not rows_to_insert:
@@ -354,10 +396,10 @@ class DashboardMonitor:
             cur.executemany("""
                 INSERT IGNORE INTO ssf_history
                 (ts, stock, stock_name, last_price, change_pct, amt_mil, amt_shr,
-                 sprd_score, mm_spread, shares, diff, vol_mil,
+                 sprd_score, mm_spread, vol_score, shares, diff, vol_mil,
                  delta_shr, delta_mil, theo_price, theo_basis,
                  ex1_bsp, ex1_ssp, ex2_basis, ex2_bsp, ex2_ssp, mtm_pnl, theo_pnl)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
             """, rows_to_insert)
             conn.commit()
             cur.close()
@@ -414,6 +456,67 @@ class DashboardMonitor:
             print(f"[ssf_monitor] dump error: {e}")
             self._db_conn = None
 
+        # 스냅샷 HTML 아카이브 저장
+        self._archive_html(dump_date)
+
+    def _archive_html(self, dump_date):
+        """ssf_mm / ssf_mm2 / sso_mm 스냅샷을 archive/ 폴더에 날짜 접미사로 저장."""
+        import reader_sso
+        archive_dir = os.path.join(BASE_DIR, "archive")
+        os.makedirs(archive_dir, exist_ok=True)
+        date_str = dump_date.strftime("%Y%m%d")
+        try:
+            generate_html(os.path.join(archive_dir, f"ssf_mm_{date_str}.html"), open_browser=False)
+            generate_html_idx(os.path.join(archive_dir, f"ssf_mm2_{date_str}.html"), open_browser=False)
+            reader_sso.generate_html(os.path.join(archive_dir, f"sso_mm_{date_str}.html"), open_browser=False)
+            print(f"[ssf_monitor] archive saved → ssf_mm_{date_str}.html, ssf_mm2_{date_str}.html, sso_mm_{date_str}.html")
+        except Exception as e:
+            print(f"[ssf_monitor] archive error: {e}")
+
+    def _print_status(self):
+        now_str = datetime.datetime.now().strftime("%H:%M:%S")
+        issues  = []
+
+        # Excel 읽기 상태
+        xl_str = "Excel:OK" if self._read_ok else "Excel:ERR ⚠"
+        if not self._read_ok:
+            issues.append("Excel 읽기 실패")
+
+        # DB 상태
+        if not self.db_save_enabled:
+            db_str = "DB:OFF(nosave)"
+        else:
+            try:
+                conn = self._get_db_conn()
+                db_ok = conn.is_connected()
+            except Exception:
+                db_ok = False
+            if db_ok:
+                db_str = "DB:OK"
+            else:
+                db_str = "DB:ERR ⚠"
+                issues.append("MySQL 연결 안됨")
+
+        # SSE 클라이언트 수
+        with self._clients_lock:
+            n_clients = len(self._clients)
+
+        # 시스템 부하 (psutil 있으면)
+        load_str = ""
+        try:
+            import psutil
+            cpu = psutil.cpu_percent(interval=None)
+            mem = psutil.virtual_memory().percent
+            load_str = f" | CPU:{cpu:.0f}% MEM:{mem:.0f}%"
+        except ImportError:
+            pass
+
+        changes = self._changes_since
+        self._changes_since = 0
+
+        status = "OK" if not issues else " / ".join(issues)
+        print(f"[status] {now_str} | {xl_str} | {db_str} | 클라이언트:{n_clients} | 변경:{changes}건/30s{load_str} | {status}")
+
     def _push(self, payload_str):
         with self._clients_lock:
             dead = []
@@ -436,13 +539,13 @@ class DashboardMonitor:
         return com_wb.Sheets("DashBoard")
 
     def _read_full(self, ws):
-        # B2:AK44 단일 COM 호출 — 헤더·MM·IDX 전 영역 커버
-        bulk = ws.Range("B2:AK44").Value
+        # B2:AL44 단일 COM 호출 — 헤더·MM·IDX 전 영역 커버
+        bulk = ws.Range("B2:AL44").Value
 
         header = {
             "base_date": _date(bulk[0][1]),   # C2
             "ytd":       _date(bulk[1][1]),   # C3
-            "ir":        _raw(bulk[0][4]),    # F2
+            "ir":        _pct(bulk[0][4]),    # F2
             "exp1":      _date(bulk[0][7]),   # I2
             "exp2":      _date(bulk[1][7]),   # I3
             "u2": _raw(bulk[0][19]), "v2": _raw(bulk[0][20]),  # U2, V2
@@ -469,12 +572,17 @@ class DashboardMonitor:
                 if ws is None:
                     ws = self._get_ws()
                 data    = self._read_full(ws)
+                self._read_ok = True
                 now_str = datetime.datetime.now().strftime("%H:%M:%S")
 
                 if prev_data is None:
                     with self._full_lock:
                         self._full_data = data
                     prev_data = data
+                    # 시작 시점이 덤프 시각 이후면 오늘 덤프 건너뜀
+                    _now = datetime.datetime.now()
+                    if (_now.hour, _now.minute) >= DB_DUMP_TIME:
+                        self._dumped_date = _now.date()
                     print("[ssf_monitor] initial load done")
                     time.sleep(1.0)
                     continue
@@ -484,9 +592,9 @@ class DashboardMonitor:
                     sid = sec_new["id"]
                     if sec_new.get("raw"):
                         for ri, (new_row, old_row) in enumerate(zip(sec_new["rows"], sec_old["rows"])):
-                            for ci, (nv, ov) in enumerate(zip(new_row, old_row)):
-                                if nv != ov:
-                                    changes.append({"key": f"{sid}_{ri}_{ci}", "v": nv, "color": "", "bg": ""})
+                            for ci, (nc, oc) in enumerate(zip(new_row, old_row)):
+                                if nc["v"] != oc["v"] or nc["bg"] != oc["bg"]:
+                                    changes.append({"key": f"{sid}_{ri}_{ci}", "v": nc["v"], "bg": nc["bg"]})
                     else:
                         for ri, (new_row, old_row) in enumerate(zip(sec_new["rows"], sec_old["rows"])):
                             for cidx, *_ in sec_new["cols"]:
@@ -498,18 +606,23 @@ class DashboardMonitor:
                                 old_bg = old_cell.get("bg", "")
                                 if new_v == old_v and new_bg == old_bg: continue
                                 changes.append({
-                                    "key":   f"{sid}_{ri}_{cidx}",
-                                    "v":     new_v,
-                                    "color": new_cell.get("color", ""),
-                                    "bg":    new_bg,
+                                    "key": f"{sid}_{ri}_{cidx}",
+                                    "v":   new_v,
+                                    "bg":  new_bg,
                                 })
 
                 data["updated"] = now_str
                 with self._full_lock:
                     self._full_data = data
                 self._push(json.dumps({"cells": changes, "updated": now_str}))
+                self._changes_since += len(changes)
                 if changes:
                     print(f"[ssf_monitor] {now_str} — pushed {len(changes)} changes")
+
+                # 30초마다 상태 출력
+                if time.time() - self._last_status_ts >= 30:
+                    self._print_status()
+                    self._last_status_ts = time.time()
 
                 if self.db_save_enabled:
                     now   = datetime.datetime.now()
@@ -526,14 +639,15 @@ class DashboardMonitor:
             except pywintypes.com_error as e:
                 hresult = e.args[0] if e.args else 0
                 if hresult in _COM_BUSY:
-                    # DDE/VBA 실행 중 — ws 유지하고 잠시 대기
                     time.sleep(0.5)
                     continue
                 print(f"[ssf_monitor] com_error: {e}")
+                self._read_ok = False
                 prev_data = None
                 ws        = None
             except Exception as e:
                 print(f"[ssf_monitor] error: {e}")
+                self._read_ok = False
                 prev_data = None
                 ws        = None
 
@@ -545,7 +659,17 @@ monitor = DashboardMonitor()
 
 # ── 단독 실행: 스냅샷 HTML 생성 ──────────────────────────────────────────
 
-def generate_html(out_path=None):
+_SPREAD_CIDX_SET = {20, 21, 23, 24}
+
+def _spread_style_py(sp, last_price):
+    """스냅샷용 spread 셀 인라인 스타일 반환."""
+    from common import get_stock_tick
+    tick = get_stock_tick(last_price)
+    if sp > 0:            return "background:#ffff00;color:#cc0000;font-weight:bold;"
+    if sp + tick > 0:     return "color:#cc0000;font-weight:bold;"
+    return ""
+
+def generate_html(out_path=None, open_browser=True):
     """MM 섹션(main/sum1/sum2) 스냅샷 HTML 생성."""
     import pythoncom, webbrowser
     pythoncom.CoInitialize()
@@ -560,8 +684,13 @@ def generate_html(out_path=None):
     mm_sections = [s for s in data["sections"] if not s.get("raw")]
     cols        = mm_sections[0]["cols"]
     num_set     = set(mm_sections[0]["num_cidx"])
-    headers     = "".join(f"<th>{hdr}</th>" for _, hdr, *_ in cols)
     now         = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    # 헤더 (sub 포함)
+    ths = ""
+    for _, hdr, sub in cols:
+        sub_html = f'<span style="display:block;font-weight:normal;font-size:9px;opacity:0.65">{sub}</span>' if sub else ""
+        ths += f"<th>{hdr}{sub_html}</th>"
 
     tbody = ""
     for si, sec in enumerate(mm_sections):
@@ -569,14 +698,27 @@ def generate_html(out_path=None):
             if meta["sep"]:
                 tbody += f'<tr><td colspan="{len(cols)}" style="height:5px;background:#f0f0f0"></td></tr>'
                 continue
+            last_price = 0
+            try: last_price = float(str(row.get("2", {}).get("v", "0")).replace(",", "")) or 0
+            except: pass
             tds = ""
             for cidx, *_ in cols:
-                cell  = row.get(str(cidx), {"v": "", "color": ""})
+                cell  = row.get(str(cidx), {"v": "", "bg": ""})
+                v     = cell["v"]
+                bg    = cell.get("bg", "")
                 align = "right" if cidx in num_set else "left"
-                cs    = "color:#1a7c34;" if cell["color"] == "green" else ("color:#cc0000;" if cell["color"] == "red" else "")
                 bold  = "font-weight:bold;" if meta.get("total") else ""
-                tds  += f'<td style="{cs}{bold}text-align:{align}">{cell["v"]}</td>'
-            tbody += f"<tr>{tds}</tr>"
+                extra = ""
+                if cidx == 10 and v == "Alert":
+                    extra = "background:#ffff00;color:#cc0000;font-weight:bold;"
+                elif cidx in _SPREAD_CIDX_SET:
+                    try: extra = _spread_style_py(float(v.replace(",", "")), last_price)
+                    except: pass
+                elif bg:
+                    extra = f"background:{bg};"
+                tds += f'<td style="{bold}text-align:{align};{extra}">{v}</td>'
+            row_cls = ' style="background:#e2efda;font-weight:bold"' if meta.get("total") else ""
+            tbody += f"<tr{row_cls}>{tds}</tr>"
         if si < len(mm_sections) - 1:
             tbody += f'<tr><td colspan="{len(cols)}" style="height:5px;background:#f0f0f0"></td></tr>'
 
@@ -589,7 +731,7 @@ def generate_html(out_path=None):
   .info span {{ font-weight:bold; }}
   .ts {{ margin-left:auto; color:#888; }}
   table {{ border-collapse:collapse; white-space:nowrap; }}
-  th {{ background:#202123; color:#fff; padding:4px 7px; font-size:11px; text-align:center; border:1px solid #444; }}
+  th {{ background:#202123; color:#fff; padding:4px 7px; font-size:11px; text-align:center; border:1px solid #444; vertical-align:bottom; }}
   td {{ padding:2px 6px; border:1px solid #e0e0e0; }}
   tr:hover td {{ background:#fffde7 !important; }}
 </style></head><body>
@@ -601,16 +743,19 @@ def generate_html(out_path=None):
   <div>Expiry2: <span>{header["exp2"]}</span></div>
   <div class="ts">Snapshot: {now}</div>
 </div>
-<table><thead><tr>{headers}</tr></thead><tbody>{tbody}</tbody></table>
+<table><thead><tr>{ths}</tr></thead><tbody>{tbody}</tbody></table>
 </body></html>"""
 
     with open(out_path, "w", encoding="utf-8") as f:
         f.write(html)
     print(f"[reader_ssf] saved → {out_path}")
-    webbrowser.open("file:///" + out_path.replace("\\", "/"))
+    if open_browser:
+        webbrowser.open("file:///" + out_path.replace("\\", "/"))
 
 
-def generate_html_idx(out_path=None):
+_SUBHDR_VALS = {"△Amount", "Strike", "Theo PnL", "MTM PnL"}
+
+def generate_html_idx(out_path=None, open_browser=True):
     """IDX2 섹션 스냅샷 HTML 생성."""
     import webbrowser
     pythoncom.CoInitialize()
@@ -619,7 +764,7 @@ def generate_html_idx(out_path=None):
         out_path = os.path.join(BASE_DIR, "ssf_idx_snapshot.html")
 
     ws       = monitor._get_ws()
-    bulk     = ws.Range("B2:AK44").Value
+    bulk     = ws.Range("B2:AL44").Value
     sections = _read_idx2(bulk)
     now      = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -628,15 +773,35 @@ def generate_html_idx(out_path=None):
         rows = sec["rows"]
         if not rows:
             continue
+        is_idx7 = sec["id"] == "idx7"
+        is_idx5 = sec["id"] == "idx5"
+
         start_row  = 0
         thead_html = ""
         if sec["has_header"]:
-            thead_html = "<thead><tr>" + "".join(f"<th>{v}</th>" for v in rows[0]) + "</tr></thead>"
+            thead_html = "<thead><tr>" + "".join(f"<th>{cell['v']}</th>" for cell in rows[0]) + "</tr></thead>"
             start_row  = 1
-        tbody = "".join(
-            "<tr>" + "".join(f"<td>{v}</td>" for v in rows[ri]) + "</tr>"
-            for ri in range(start_row, len(rows))
-        )
+        elif sec.get("header"):
+            thead_html = "<thead><tr>" + "".join(f"<th>{h}</th>" for h in sec["header"]) + "</tr></thead>"
+
+        tbody = ""
+        for ri in range(start_row, len(rows)):
+            tds = ""
+            for ci, cell in enumerate(rows[ri]):
+                v  = cell["v"]
+                bg = cell.get("bg", "")
+                style = ""
+                if is_idx7 and ci == 0:
+                    style = "background:#202123;color:#fff;font-weight:bold"
+                elif is_idx5 and v in _SUBHDR_VALS:
+                    style = "background:#202123;color:#fff;font-weight:bold"
+                elif ci == 0 and v == "Alert":
+                    style = "background:#ffff00;color:#cc0000;font-weight:bold"
+                elif bg:
+                    style = f"background:{bg}"
+                tds += f'<td{f" style=\"{style}\"" if style else ""}>{v}</td>'
+            tbody += f"<tr>{tds}</tr>"
+
         body += f'<div style="margin-bottom:10px"><table>{thead_html}<tbody>{tbody}</tbody></table></div>'
 
     html = f"""<!DOCTYPE html>
@@ -657,7 +822,8 @@ def generate_html_idx(out_path=None):
     with open(out_path, "w", encoding="utf-8") as f:
         f.write(html)
     print(f"[reader_ssf] saved → {out_path}")
-    webbrowser.open("file:///" + out_path.replace("\\", "/"))
+    if open_browser:
+        webbrowser.open("file:///" + out_path.replace("\\", "/"))
 
 
 if __name__ == "__main__":

@@ -26,12 +26,12 @@ COLS = [
     (1,  "StockName",  lambda v: str(v) if v else ""),
     (2,  "Delta",      lambda v: _num(v, 0)),
     (4,  "%Gamma",     lambda v: _num(v, 2)),
-    (6,  "Volume",     lambda v: _num(v, 0)),
+    (6,  "Volume_Cnt",     lambda v: _num(v, 0)),
+    (7,  "Volume_Amt",     lambda v: _num(v, 0)),
     (8,  "Theo PnL",   lambda v: _num(v, 0)),
     (10, "MTM PnL",    lambda v: _num(v, 0)),
 ]
 
-PNL_CIDX = {c[0] for c in COLS if "PnL" in c[1]}
 NUM_CIDX  = {c[0] for c in COLS if c[0] not in (0, 1)}
 COLORSCALE_CIDX = {8, 10}  # Theo PnL, MTM PnL
 
@@ -62,15 +62,6 @@ ALL_DETAIL_FMTS = {
     21: lambda v: _num(v, 0),
     22: lambda v: _num(v, 0),
 }
-DETAIL_PNL_CIDX = {7, 8, 21, 22}
-
-
-def _pnl_color(cidx, raw):
-    """PnL 컬럼의 값에 따라 'green' / 'red' / '' 반환."""
-    if cidx not in PNL_CIDX or raw is None: return ""
-    try: return "green" if float(raw) > 0 else ("red" if float(raw) < 0 else "")
-    except: return ""
-
 
 class SsoMonitor:
     """
@@ -171,14 +162,7 @@ class SsoMonitor:
             for cidx, fmt in ALL_DETAIL_FMTS.items():
                 raw_v = row_data[cidx] if cidx < len(row_data) else None
                 fval  = fmt(raw_v) if (raw_v is not None and raw_v != "") else ""
-                color = ""
-                if cidx in DETAIL_PNL_CIDX and raw_v is not None:
-                    try:
-                        fv = float(raw_v)
-                        color = "green" if fv > 0 else ("red" if fv < 0 else "")
-                    except Exception:
-                        pass
-                cells[str(cidx)] = {"v": fval, "color": color}
+                cells[str(cidx)] = {"v": fval}
 
             detail[current_stock]["rows"].append({"type": row_type, "cells": cells})
 
@@ -213,7 +197,7 @@ class SsoMonitor:
                 raw  = row_data[cidx]
                 fval = fmt(raw) if (raw is not None and raw != "") else ""
                 bg   = _colorscale_bg(raw, cs_min.get(cidx), cs_max.get(cidx)) if cidx in COLORSCALE_CIDX else ""
-                cells[str(cidx)] = {"v": fval, "color": _pnl_color(cidx, raw), "bg": bg}
+                cells[str(cidx)] = {"v": fval, "bg": bg}
             rows.append(cells)
 
         result = {
@@ -259,10 +243,9 @@ class SsoMonitor:
                         if new_v == old_v and new_bg == old_bg:
                             continue
                         changes.append({
-                            "key":   f"{ri}_{cidx}",
-                            "v":     new_v,
-                            "color": new_cell.get("color", ""),
-                            "bg":    new_bg,
+                            "key": f"{ri}_{cidx}",
+                            "v":   new_v,
+                            "bg":  new_bg,
                         })
 
                 # _full_data는 detail을 포함하므로 항상 갱신
@@ -292,37 +275,92 @@ class SsoMonitor:
 
 
 monitor = SsoMonitor()
+'''
+self = monitor
+'''
 
 
 # ── 단독 실행: 스냅샷 HTML 생성 ──────────────────────────────────────────
 
-def generate_html(out_path=None):
+_DETAIL_COLS = [
+    (0,  "StockCode",   "left"),
+    (1,  "Name/Code",   "left"),
+    (2,  "C.Qty",       "right"),
+    (3,  "C.△Qty",      "right"),
+    (4,  "C.Vol",       "right"),
+    (5,  "C.Delta",     "right"),
+    (6,  "C.Gamma",     "right"),
+    (7,  "C.Eval PnL",  "right"),
+    (8,  "C.Trade PnL", "right"),
+    (9,  "Call IV",     "right"),
+    (10, "Call OTM",    "center"),
+    (11, "Call Code",   "left"),
+    (12, "Strike",      "right"),
+    (13, "Put Code",    "left"),
+    (14, "Put IV",      "right"),
+    (15, "Put OTM",     "center"),
+    (16, "P.Qty",       "right"),
+    (17, "P.△Qty",      "right"),
+    (18, "P.Vol",       "right"),
+    (19, "P.Delta",     "right"),
+    (20, "P.Gamma",     "right"),
+    (21, "P.Eval PnL",  "right"),
+    (22, "P.Trade PnL", "right"),
+]
+
+def generate_html(out_path=None, open_browser=True):
     """
     Option_DashBoard 탭을 한 번 읽어 정적 HTML 스냅샷을 생성.
-    out_path 미지정 시 이 스크립트와 같은 폴더에 sso_snapshot.html 저장.
+    요약 테이블 + 전 종목 상세 테이블 인라인 포함.
     """
     if out_path is None:
         out_path = os.path.join(BASE_DIR, "templates", "sso_snapshot.html")
 
     ws   = monitor._get_ws()
     data = monitor._read_full(ws)
+    now  = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
+    # ── 요약 테이블 ──────────────────────────────────────────────────────
     headers = "".join(f"<th>{hdr}</th>" for _, hdr in data["cols"])
     num_set = set(data["num_cidx"])
-
-    rows_html = ""
-    for ri, row in enumerate(data["rows"]):
+    sum_rows = ""
+    for row in data["rows"]:
         tds = ""
         for cidx, _ in data["cols"]:
-            cell  = row.get(str(cidx), {"v": "", "color": ""})
+            cell  = row.get(str(cidx), {"v": "", "bg": ""})
             align = "right" if cidx in num_set else "left"
-            color_style = ""
-            if cell["color"] == "green": color_style = "color:#1a7c34;"
-            elif cell["color"] == "red": color_style = "color:#cc0000;"
-            tds += f'<td style="{color_style}text-align:{align}">{cell["v"]}</td>'
-        rows_html += f"<tr>{tds}</tr>"
+            bg    = f"background:{cell['bg']};" if cell.get("bg") else ""
+            tds  += f'<td style="text-align:{align};{bg}">{cell["v"]}</td>'
+        sum_rows += f"<tr>{tds}</tr>"
 
-    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    # ── 전 종목 상세 테이블 ───────────────────────────────────────────────
+    det_thead = "".join(f'<th style="text-align:{a}">{h}</th>' for _, h, a in _DETAIL_COLS)
+    det_body  = ""
+    for code, stock in data.get("detail", {}).items():
+        if not code.isdigit():
+            continue
+        rows_html = ""
+        for row in stock["rows"]:
+            t = row["type"]
+            if   t == "summary": tr_style = 'style="background:#e8eaf6;font-weight:bold"'
+            elif t == "futures": tr_style = 'style="background:#f3f4f6;color:#555"'
+            elif row["cells"].get("10", {}).get("v") == "ATM":
+                                  tr_style = 'style="background:#fff9c4;font-weight:bold"'
+            else:                 tr_style = ""
+            tds = "".join(
+                f'<td style="text-align:{a}">{row["cells"].get(str(ci), {"v":""})["v"]}</td>'
+                for ci, _, a in _DETAIL_COLS
+            )
+            rows_html += f"<tr {tr_style}>{tds}</tr>"
+        det_body += (
+            f'<div style="margin-top:20px;padding-bottom:6px;margin-bottom:6px;'
+            f'border-bottom:2px solid #202123;font-size:13px;font-weight:bold;">'
+            f'{code}&nbsp;&nbsp;{stock["name"]}</div>'
+            f'<div style="overflow-x:auto">'
+            f'<table><thead><tr>{det_thead}</tr></thead><tbody>{rows_html}</tbody></table>'
+            f'</div>'
+        )
+
     html = f"""<!DOCTYPE html>
 <html lang="ko"><head><meta charset="UTF-8"/>
 <title>SSO MM Snapshot</title>
@@ -336,111 +374,18 @@ def generate_html(out_path=None):
   tr:hover td {{ background:#fffde7 !important; }}
 </style></head><body>
 <div class="ts">Snapshot: {now}</div>
-<table><thead><tr>{headers}</tr></thead><tbody>{rows_html}</tbody></table>
+<table><thead><tr>{headers}</tr></thead><tbody>{sum_rows}</tbody></table>
+{det_body}
 </body></html>"""
 
     with open(out_path, "w", encoding="utf-8") as f:
         f.write(html)
     print(f"[reader_sso] saved → {out_path}")
-    webbrowser.open("file:///" + out_path.replace("\\", "/"))
-
-
-def generate_detail_html(out_path=None):
-    """
-    _parse_detail() 결과를 정적 HTML로 저장해 파싱 결과를 눈으로 확인.
-    종목별로 summary/futures/option 행을 한 테이블에 그대로 출력.
-    """
-    if out_path is None:
-        out_path = os.path.join(BASE_DIR, "templates", "sso_detail_snapshot.html")
-
-    ws     = monitor._get_ws()
-    detail = monitor._parse_detail(ws)
-    now    = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-    HDR_COLS = [
-        (0,  "StockCode",    "left"),
-        (1,  "Name/Code",    "left"),
-        (2,  "C.Qty",        "right"),
-        (3,  "C.△Qty",       "right"),
-        (4,  "C.Vol",        "right"),
-        (5,  "C.Delta",      "right"),
-        (6,  "C.Gamma",      "right"),
-        (7,  "C.Eval PnL",   "right"),
-        (8,  "C.Trade PnL",  "right"),
-        (9,  "Call IV",      "right"),
-        (10, "Call OTM",     "center"),
-        (11, "Call Code",    "left"),
-        (12, "Strike",       "right"),
-        (13, "Put Code",     "left"),
-        (14, "Put IV",       "right"),
-        (15, "Put OTM",      "center"),
-        (16, "P.Qty",        "right"),
-        (17, "P.△Qty",       "right"),
-        (18, "P.Vol",        "right"),
-        (19, "P.Delta",      "right"),
-        (20, "P.Gamma",      "right"),
-        (21, "P.Eval PnL",   "right"),
-        (22, "P.Trade PnL",  "right"),
-    ]
-    thead = "".join(f'<th style="text-align:{a}">{h}</th>' for _, h, a in HDR_COLS)
-
-    body_html = ""
-    for code, stock in detail.items():
-        rows_html = ""
-        for row in stock["rows"]:
-            t = row["type"]
-            if   t == "summary": tr_style = 'style="background:#e8eaf6;font-weight:bold"'
-            elif t == "futures": tr_style = 'style="background:#f3f4f6;color:#555"'
-            elif (row["cells"].get("10", {}).get("v") == "ATM"):
-                                  tr_style = 'style="background:#fff9c4;font-weight:bold"'
-            else:                 tr_style = ""
-
-            tds = ""
-            for cidx, _, align in HDR_COLS:
-                cell  = row["cells"].get(str(cidx), {"v": "", "color": ""})
-                color = ""
-                if cell["color"] == "green": color = "color:#1a7c34;"
-                elif cell["color"] == "red": color = "color:#cc0000;"
-                tds += f'<td style="{color}text-align:{align}">{cell["v"]}</td>'
-            rows_html += f"<tr {tr_style}>{tds}</tr>"
-
-        body_html += f"""
-<h3 style="margin:16px 0 4px;font-size:13px">{code} {stock['name']}
-  <span style="font-weight:normal;color:#888;font-size:11px">
-    ({len(stock['rows'])}행)</span></h3>
-<div style="overflow-x:auto">
-<table><thead><tr>{thead}</tr></thead><tbody>{rows_html}</tbody></table>
-</div>"""
-
-    html = f"""<!DOCTYPE html>
-<html lang="ko"><head><meta charset="UTF-8"/>
-<title>SSO Detail Snapshot</title>
-<style>
-  body {{ margin:0; padding:10px; font-family:'Segoe UI',sans-serif; font-size:12px; }}
-  .ts  {{ text-align:right; color:#888; font-size:11px; margin-bottom:8px; }}
-  table {{ border-collapse:collapse; white-space:nowrap; margin-bottom:4px; }}
-  th {{ background:#202123; color:#fff; padding:4px 8px; font-size:11px;
-        text-align:center; border:1px solid #444; }}
-  td {{ padding:2px 8px; border:1px solid #e0e0e0; }}
-  tr:hover td {{ background:#fffde7 !important; }}
-</style></head><body>
-<div class="ts">Snapshot: {now}</div>
-{body_html}
-</body></html>"""
-
-    with open(out_path, "w", encoding="utf-8") as f:
-        f.write(html)
-    print(f"[reader_sso] detail saved → {out_path}")
-    print(f"  종목 수: {len(detail)}")
-    for code, stock in detail.items():
-        n_fut = sum(1 for r in stock["rows"] if r["type"] == "futures")
-        n_opt = sum(1 for r in stock["rows"] if r["type"] == "option")
-        print(f"  {code} {stock['name']}: 선물 {n_fut}행, 옵션 {n_opt}행")
-    webbrowser.open("file:///" + out_path.replace("\\", "/"))
+    if open_browser:
+        webbrowser.open("file:///" + out_path.replace("\\", "/"))
 
 
 if __name__ == "__main__":
     import pythoncom
     pythoncom.CoInitialize()
     generate_html()
-    generate_detail_html()
