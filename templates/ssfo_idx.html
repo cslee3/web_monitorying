@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"/>
+<title>SSF MM2</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', sans-serif; font-size: 12px; background: #fff; }
+
+  .info-bar {
+    display: flex; align-items: center; gap: 20px;
+    padding: 5px 10px; background: #eef2f6; border-bottom: 1px solid #d0d8e0;
+    position: sticky; top: 0; z-index: 10; flex-wrap: wrap;
+  }
+  .info-bar .item { font-size: 11px; }
+  .info-bar .item span { font-weight: bold; }
+  .updated { margin-left: auto; color: #888; font-size: 11px; }
+
+  .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #ccc; display: inline-block; margin-right: 6px;
+    transition: background 0.2s;
+  }
+  .dot.live { background: #2ecc71; }
+  .dot.error { background: #e74c3c; }
+
+  .tables-wrap {
+    overflow: auto;
+    height: calc(100vh - 30px);
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .table-section { display: inline-block; }
+
+  table { border-collapse: collapse; white-space: nowrap; }
+  thead th {
+    background: #202123; color: #fff; padding: 4px 7px;
+    font-size: 11px; text-align: center; border: 1px solid #444;
+  }
+  td { padding: 2px 6px; border: 1px solid #e0e0e0; text-align: right; }
+  tr:hover td { background: #fffde7 !important; }
+  .total-row td { background: #e2efda !important; font-weight: bold; }
+
+
+  .pnl-green { color: #1a7c34; }
+  .pnl-red   { color: #cc0000; }
+
+  #status { padding: 40px; text-align: center; color: #888; font-size: 14px; }
+</style>
+</head>
+<body>
+
+<div class="info-bar" id="infoBar" style="display:none">
+  <span class="dot" id="liveDot"></span>
+  <div class="item">BaseDate: <span id="hBaseDate"></span></div>
+  <div class="item">Ytd: <span id="hYtd"></span></div>
+  <div class="item">I/R: <span id="hIr"></span></div>
+  <div class="item">Expiry1: <span id="hExp1"></span></div>
+  <div class="item">Expiry2: <span id="hExp2"></span></div>
+  <div class="item"><span id="hU2"></span> <span id="hV2"></span></div>
+  <div class="item"><span id="hU3"></span> <span id="hV3"></span></div>
+  <div class="updated">Updated: <span id="hUpdated">-</span></div>
+</div>
+
+<div id="status">데이터 로딩 중...</div>
+
+<div class="tables-wrap" id="tablesWrap" style="display:none"></div>
+
+<script>
+let es = null;
+let wasError = false;
+
+async function loadFull() {
+  try {
+    const res = await fetch("/api/dashboard");
+    if (!res.ok) { setTimeout(loadFull, 2000); return; }
+    const d = await res.json();
+    if (d.error) { setTimeout(loadFull, 2000); return; }
+    buildTables(d);
+    connectStream();
+  } catch(e) {
+    document.getElementById("status").textContent = "서버 연결 실패, 재시도 중...";
+    setTimeout(loadFull, 2000);
+  }
+}
+
+function buildTables(d) {
+  document.getElementById("hBaseDate").textContent = d.header.base_date;
+  document.getElementById("hYtd").textContent      = d.header.ytd;
+  document.getElementById("hIr").textContent       = d.header.ir;
+  document.getElementById("hExp1").textContent     = d.header.exp1;
+  document.getElementById("hExp2").textContent     = d.header.exp2;
+  document.getElementById("hU2").textContent       = d.header.u2;
+  document.getElementById("hV2").textContent       = d.header.v2;
+  document.getElementById("hU3").textContent       = d.header.u3;
+  document.getElementById("hV3").textContent       = d.header.v3;
+  document.getElementById("hUpdated").textContent  = d.updated;
+
+  const idxSections = d.sections.filter(s => s.raw);
+  let html = "";
+
+  for (const sec of idxSections) {
+    const rows = sec.rows;
+    if (!rows.length) continue;
+
+    let theadHtml = "";
+    let startRow  = 0;
+    if (sec.has_header) {
+      theadHtml = "<thead><tr>" + rows[0].map(v => `<th>${v}</th>`).join("") + "</tr></thead>";
+      startRow  = 1;
+    } else if (sec.header) {
+      theadHtml = "<thead><tr>" + sec.header.map(v => `<th>${v}</th>`).join("") + "</tr></thead>";
+    }
+
+    let tbody = "";
+    for (let ri = startRow; ri < rows.length; ri++) {
+      tbody += "<tr>" + rows[ri].map((v, ci) =>
+        `<td id="c-${sec.id}-${ri}-${ci}">${v}</td>`
+      ).join("") + "</tr>";
+    }
+
+    html += `<div class="table-section"><table>${theadHtml}<tbody>${tbody}</tbody></table></div>`;
+  }
+
+  document.getElementById("tablesWrap").innerHTML = html;
+  document.getElementById("status").style.display     = "none";
+  document.getElementById("infoBar").style.display    = "flex";
+  document.getElementById("tablesWrap").style.display = "flex";
+}
+
+function connectStream() {
+  if (es) es.close();
+  es = new EventSource("/api/stream");
+
+  es.onopen = () => {
+    document.getElementById("liveDot").className = "dot";
+    if (wasError) {
+      wasError = false;
+      fetch("/api/dashboard").then(r => r.ok ? r.json() : null)
+        .then(d => { if (d && !d.error) buildTables(d); }).catch(() => {});
+    }
+  };
+
+  es.onmessage = (e) => {
+    const d = JSON.parse(e.data);
+    if (d.type === "connected") return;
+    applyChanges(d.cells, d.updated);
+  };
+
+  es.onerror = () => {
+    document.getElementById("liveDot").className = "dot error";
+    wasError = true;
+  };
+}
+
+function applyChanges(cells, updated) {
+  document.getElementById("hUpdated").textContent = updated;
+
+  for (const { key, v } of cells) {
+    // raw 섹션 key: "idx1_2_3" (sid_ri_ci)
+    if (!key.startsWith("idx")) continue;
+    const parts = key.split("_");
+    const sid = parts[0];
+    const ri  = parts[1];
+    const ci  = parts[2];
+
+    const td = document.getElementById(`c-${sid}-${ri}-${ci}`);
+    if (!td) continue;
+
+    td.textContent = v;
+  }
+
+  const dot = document.getElementById("liveDot");
+  dot.classList.add("live");
+  setTimeout(() => dot.classList.remove("live"), 300);
+}
+
+loadFull();
+</script>
+</body>
+</html>

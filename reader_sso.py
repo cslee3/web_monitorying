@@ -16,6 +16,8 @@ import pywintypes
 _COM_BUSY = {-2147418111, -2147417846}
 
 from common import BASE_DIR, BOOK_NAME, _num, _colorscale_bg
+from logger import get_logger
+log = get_logger(__name__)
 
 # ── 컬럼 정의 ──────────────────────────────────────────────────────────────
 # (Excel 1-based 열 번호, 화면 헤더 텍스트, 값 포매터 함수)
@@ -26,8 +28,8 @@ COLS = [
     (1,  "StockName",  lambda v: str(v) if v else ""),
     (2,  "Delta",      lambda v: _num(v, 0)),
     (4,  "%Gamma",     lambda v: _num(v, 2)),
-    (6,  "Volume_Cnt",     lambda v: _num(v, 0)),
-    (7,  "Volume_Amt",     lambda v: _num(v, 0)),
+    (6,  "Amt Shr1",     lambda v: _num(v, 0)),
+    (7,  "Amt Shr2",     lambda v: _num(v, 0)),
     (8,  "Theo PnL",   lambda v: _num(v, 0)),
     (10, "MTM PnL",    lambda v: _num(v, 0)),
 ]
@@ -75,6 +77,34 @@ class SsoMonitor:
         self._clients       = []
         self._full_lock     = threading.Lock()
         self._full_data     = None
+        self._running        = False  # 기본값: 중지 (터미널에서 r 입력으로 시작)
+        self._last_status_ts = 0
+        self._changes_since  = 0
+        self._wake           = threading.Event()
+
+    # ── 모니터 시작/중지 ──────────────────────────────────────────────────
+
+    def pause(self):
+        self._running = False
+        self._push(json.dumps({"type": "monitor_paused", "mon": "sso"}))
+
+    def resume(self):
+        self._running = True
+        self._wake.set()
+        self._push(json.dumps({"type": "monitor_resumed", "mon": "sso"}))
+
+    def is_running(self):
+        return self._running
+
+    def _print_status(self):
+        now_str  = datetime.datetime.now().strftime("%H:%M:%S")
+        run_str  = "SSO:실행중" if self._running else "SSO:중지"
+        xl_str   = "Excel:OK" if self._full_data else "Excel:대기"
+        with self._clients_lock:
+            n_clients = len(self._clients)
+        changes = self._changes_since
+        self._changes_since = 0
+        log.info(f"{run_str} | {xl_str} | 클라이언트:{n_clients} | 변경:{changes}건/30s")
 
     # ── 클라이언트 큐 관리 ────────────────────────────────────────────────
 
@@ -105,16 +135,15 @@ class SsoMonitor:
     # ── Excel 워크시트 참조 획득 ──────────────────────────────────────────
 
     def _get_ws(self):
-        """win32com ROT에서 Option_DashBoard 시트 직접 참조."""
-        path = os.path.join(BASE_DIR, BOOK_NAME)
-        try:
-            com_wb = win32com.client.GetObject(path)
-            return com_wb.Sheets("Option_DashBoard")
-        except Exception:
-            pass
-        xl = win32com.client.Dispatch("Excel.Application")
-        com_wb = xl.Workbooks.Open(path)
-        return com_wb.Sheets("Option_DashBoard")
+        """실행 중인 Excel에서 BOOK_NAME 워크북을 이름으로 찾아 Option_DashBoard 시트 반환.
+        GetObject(path) 대신 GetActiveObject 사용 — OneDrive 경로 불일치 문제 회피.
+        """
+        xl = win32com.client.GetActiveObject("Excel.Application")
+        for i in range(1, xl.Workbooks.Count + 1):
+            wb = xl.Workbooks.Item(i)
+            if wb.Name == BOOK_NAME:
+                return wb.Sheets("Option_DashBoard")
+        raise RuntimeError(f"'{BOOK_NAME}' 파일이 Excel에서 열려있지 않음")
 
     # ── 상세 데이터 파싱 (3초 캐시) ──────────────────────────────────────
 
@@ -167,7 +196,7 @@ class SsoMonitor:
             detail[current_stock]["rows"].append({"type": row_type, "cells": cells})
 
         if not detail:
-            print("[sso_monitor] _parse_detail: no rows parsed (check B11:Q350 range)")
+            log.warning("_parse_detail: no rows parsed (check B11:Q350 range)")
         return detail
 
     # ── 전체 데이터 읽기 ──────────────────────────────────────────────────
@@ -217,6 +246,14 @@ class SsoMonitor:
         ws        = None
 
         while True:
+            if not self._running:
+                if ws is not None:
+                    ws        = None   # COM 참조 해제
+                    prev_data = None
+                self._wake.wait(timeout=0.5)
+                self._wake.clear()
+                continue
+
             try:
                 if ws is None:
                     ws = self._get_ws()
@@ -227,8 +264,9 @@ class SsoMonitor:
                     with self._full_lock:
                         self._full_data = data
                     prev_data = data
-                    print("[sso_monitor] initial load done")
-                    time.sleep(1.0)
+                    log.warning("initial load done")
+                    self._wake.wait(timeout=1.0)
+                    self._wake.clear()
                     continue
 
                 changes = []
@@ -253,25 +291,32 @@ class SsoMonitor:
                 with self._full_lock:
                     self._full_data = data
                 self._push(json.dumps({"cells": changes, "updated": now_str}))
+                self._changes_since += len(changes)
                 if changes:
-                    print(f"[sso_monitor] {now_str} — pushed {len(changes)} changes")
+                    log.info(f"{now_str} — pushed {len(changes)} changes")
+
+                if time.time() - self._last_status_ts >= 30:
+                    self._print_status()
+                    self._last_status_ts = time.time()
 
                 prev_data = data
 
             except pywintypes.com_error as e:
                 hresult = e.args[0] if e.args else 0
                 if hresult in _COM_BUSY:
-                    time.sleep(0.5)
+                    self._wake.wait(timeout=0.5)
+                    self._wake.clear()
                     continue
-                print(f"[sso_monitor] com_error: {e}")
+                log.error(f"com_error: {e}")
                 prev_data = None
                 ws        = None
             except Exception as e:
-                print(f"[sso_monitor] error: {e}")
+                log.error(f"error: {e}")
                 prev_data = None
                 ws        = None
 
-            time.sleep(1.0)
+            self._wake.wait(timeout=1.0)
+            self._wake.clear()
 
 
 monitor = SsoMonitor()
@@ -380,7 +425,7 @@ def generate_html(out_path=None, open_browser=True):
 
     with open(out_path, "w", encoding="utf-8") as f:
         f.write(html)
-    print(f"[reader_sso] saved → {out_path}")
+    log.info(f"saved → {out_path}")
     if open_browser:
         webbrowser.open("file:///" + out_path.replace("\\", "/"))
 

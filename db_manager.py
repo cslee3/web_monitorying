@@ -16,7 +16,6 @@ import subprocess
 import time
 import os
 import signal
-
 try:
     import mysql.connector
     HAS_CONNECTOR = True
@@ -26,9 +25,8 @@ except ImportError:
 # ── 설정 ──────────────────────────────────────────────────────────────────────
 # IP 10.115.31.99 (DB 서버 PC): D:\mysql 직접 사용
 # 그 외 PC: D:\OneDrive\mysql (OneDrive 공유 경로)
-import socket as _socket
-_LOCAL_IP = _socket.gethostbyname(_socket.gethostname())
-MYSQL_BIN  = r"D:\mysql\bin" if _LOCAL_IP == "10.115.31.99" else r"D:\OneDrive\mysql\bin"
+# D:\mysql\bin 이 있으면 DB 서버 PC, 없으면 OneDrive 경로 사용
+MYSQL_BIN  = r"D:\mysql\bin" if os.path.isdir(r"D:\mysql\bin") else r"D:\OneDrive\mysql\bin"
 MYSQLD      = os.path.join(MYSQL_BIN, "mysqld.exe")
 MYSQLADMIN  = os.path.join(MYSQL_BIN, "mysqladmin.exe")
 
@@ -48,16 +46,13 @@ class DBManager:
 
     # ── 상태 확인 ─────────────────────────────────────────────────────────────
     def is_running(self) -> bool:
-        """mysqld 프로세스가 실행 중인지 확인 (포트 ping 방식)."""
-        if not HAS_CONNECTOR:
-            return self._ping_tasklist()
+        """mysqld 프로세스가 실행 중인지 확인 (raw 소켓 포트 체크)."""
+        import socket
         try:
-            c = mysql.connector.connect(
-                host=DB_HOST, port=DB_PORT,
-                user=DB_USER, password=DB_PASSWORD,
-                connection_timeout=2,
-            )
-            c.close()
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.settimeout(2)
+            s.connect((DB_HOST, DB_PORT))
+            s.close()
             return True
         except Exception:
             return False
@@ -197,6 +192,7 @@ class DBManager:
             password=DB_PASSWORD,
             database=database,
             charset="utf8mb4",
+            ssl_disabled=True,
         )
 
     # ── context manager 지원 ─────────────────────────────────────────────────

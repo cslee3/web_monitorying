@@ -23,6 +23,8 @@ import pywintypes
 _COM_BUSY = {-2147418111, -2147417846}   # RPC_E_CALL_REJECTED, RPC_E_SERVERCALL_RETRYLATER
 
 from common import BASE_DIR, BOOK_NAME, _pct, _num, _date, _colorscale_rank, _is_xl_error
+from logger import get_logger
+log = get_logger(__name__)
 
 # ── 컬럼 정의 ──────────────────────────────────────────────────────────────
 # MM sections: B5:AA36, B38:AA40, B42:AA43
@@ -33,14 +35,14 @@ MM_COLS = [
     (2,  "LastPrice",     lambda v: _num(v, 0)),
     (3,  "Change(%)",     _pct),
     (4,  "Amt(Mil)",      lambda v: _num(v, 0)),
-    (5,  "Amt(Shr)",      lambda v: _num(v, 0)),
-    # cidx 6 = H열 차근월물 주식수 (Excel 숨김)
-    (7,  "Sprd Score",    lambda v: "" if (v is None or v == "") else (f"{int(round(float(v)*100))}%" if not _is_xl_error(v) else "")),  # I열, 정수 %
+    (5,  "Amt Shr1",      lambda v: _num(v, 0)),
+    (6,  "Amt Shr2",      lambda v: _num(v, 0)),
+    (7,  "Sprd Score",    lambda v: "" if (v is None or v == "") else ("" if _is_xl_error(v) else (f"{int(round(float(v)*100))}%" if isinstance(v, (int, float)) else str(v)))),  # I열, 정수 % (문자열이면 그대로)
     # cidx 8 = J열 Ask  (Excel 숨김)
     # cidx 9 = K열 Bid  (Excel 숨김)
     (10, "MM Spread",     lambda v: str(v) if v else ""),
     (11, "Volume Score",  lambda v: _num(v, 2)),
-    (12, "Shares",        lambda v: _num(v, 0)),
+    (12, "△Shares",       lambda v: _num(v, 0)),
     (13, "Diff",          lambda v: _num(v, 0)),
     # cidx 14 = O열 Vol(Lots) (Excel 숨김)
     (15, "Vol(Mil)",      lambda v: _num(v, 0)),
@@ -62,7 +64,8 @@ MM_NUM_CIDX  = {c[0] for c in MM_COLS if c[0] not in (0, 1, 10)}
 MM_COL_SUBS = {
     3:  "Change (%)",
     4:  "Amount (Mil KRW)",
-    5:  "Amount (Shares)",
+    5:  "Amount Shr1",
+    6:  "Amount Shr2",
     12: "△Shares",
     15: "Volume (Mkrw)",
     16: "Delta (Shares)",
@@ -103,9 +106,9 @@ TOTAL_VALS = {"합계", "합 계", "Total", "소계"}
 
 # DB 저장 허용 시간대 (HH, MM)
 DB_SAVE_START = (9, 5)
-DB_SAVE_END   = (15, 20)
+DB_SAVE_END   = (15, 35)
 # 일별 SQL 덤프 시각 (장 마감 후)
-DB_DUMP_TIME  = (15, 30)
+DB_DUMP_TIME  = (15, 35)
 
 
 
@@ -305,6 +308,24 @@ class DashboardMonitor:
         self._last_status_ts = 0      # 마지막 상태 출력 시각
         self._changes_since  = 0      # 마지막 상태 출력 이후 변경 건수
         self._read_ok        = False  # 마지막 Excel 읽기 성공 여부
+        self._running        = False  # 기본값: 중지 (터미널에서 r 입력으로 시작)
+        self._wake           = threading.Event()  # resume() 시 sleep 즉시 해제
+        self._db_err_ts      = 0.0   # 마지막 DB 에러 로그 시각 (스팸 방지)
+        self._db_ok          = False  # DB 연결 성공 여부 (status 표시용, 네트워크 I/O 없이 읽음)
+
+    # ── 모니터 시작/중지 ──────────────────────────────────────────────────
+
+    def pause(self):
+        self._running = False
+        self._push(json.dumps({"type": "monitor_paused", "mon": "ssf"}))
+
+    def resume(self):
+        self._running = True
+        self._wake.set()  # 대기 중인 sleep 즉시 해제
+        self._push(json.dumps({"type": "monitor_resumed", "mon": "ssf"}))
+
+    def is_running(self):
+        return self._running
 
     def add_client(self):
         q = Queue(maxsize=200)
@@ -326,17 +347,35 @@ class DashboardMonitor:
         return self.db_save_enabled
 
     def _get_db_conn(self):
+        import socket
         import mysql.connector
         from db_manager import DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME
-        try:
-            if self._db_conn and self._db_conn.is_connected():
+
+        # 기존 연결 상태 확인 (is_connected가 내부 에러 낼 수 있으므로 통째로 방어)
+        if self._db_conn is not None:
+            try:
+                self._db_conn.ping(reconnect=False)
                 return self._db_conn
+            except Exception:
+                try: self._db_conn.close()
+                except Exception: pass
+                self._db_conn = None
+
+        # 포트 열려있는지 먼저 확인 (hang 방지)
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.settimeout(2)
+            s.connect((DB_HOST, DB_PORT))
+            s.close()
         except Exception:
-            pass
+            raise ConnectionError(f"MySQL 미연결 ({DB_HOST}:{DB_PORT})")
+
         self._db_conn = mysql.connector.connect(
             host=DB_HOST, port=DB_PORT,
             user=DB_USER, password=DB_PASSWORD,
             database=DB_NAME, charset="utf8mb4",
+            connection_timeout=3,
+            ssl_disabled=True,
         )
         return self._db_conn
 
@@ -369,6 +408,7 @@ class DashboardMonitor:
                 _r(row, 3),
                 _r(row, 4),
                 _r(row, 5),
+                _r(row, 6),
                 _r(row, 7),   # sprd_score (I열)
                 row.get("10", {}).get("v") or None,
                 _r(row, 11),  # vol_score
@@ -395,17 +435,22 @@ class DashboardMonitor:
             cur  = conn.cursor()
             cur.executemany("""
                 INSERT IGNORE INTO ssf_history
-                (ts, stock, stock_name, last_price, change_pct, amt_mil, amt_shr,
+                (ts, stock, stock_name, last_price, change_pct, amt_mil, amt_shr1, amt_shr2,
                  sprd_score, mm_spread, vol_score, shares, diff, vol_mil,
                  delta_shr, delta_mil, theo_price, theo_basis,
                  ex1_bsp, ex1_ssp, ex2_basis, ex2_bsp, ex2_ssp, mtm_pnl, theo_pnl)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
             """, rows_to_insert)
             conn.commit()
             cur.close()
-            print(f"[ssf_monitor] db saved {len(rows_to_insert)} rows  ts={ts:.3f}")
+            self._db_ok = True
+            log.info(f"db saved {len(rows_to_insert)} rows  ts={ts:.3f}")
         except Exception as e:
-            print(f"[ssf_monitor] db save error: {e}")
+            self._db_ok = False
+            now = time.time()
+            if now - self._db_err_ts >= 60:
+                log.error(f"db save error: {e}")
+                self._db_err_ts = now
             self._db_conn = None
 
     def _dump_and_cleanup(self, dump_date):
@@ -447,17 +492,24 @@ class DashboardMonitor:
                     (day_start, day_end),
                 )
                 conn.commit()
-                print(f"[ssf_monitor] dumped {len(rows)} rows → {fname}, DB 정리 완료")
+                log.warning(f"dumped {len(rows)} rows → {fname}, DB 정리 완료")
             else:
-                print(f"[ssf_monitor] dump 대상 없음 ({dump_date})")
+                log.info(f"dump 대상 없음 ({dump_date})")
 
             cur.close()
         except Exception as e:
-            print(f"[ssf_monitor] dump error: {e}")
+            log.error(f"dump error: {e}")
             self._db_conn = None
 
         # 스냅샷 HTML 아카이브 저장
         self._archive_html(dump_date)
+
+        # 로그 아카이브 (log/archive/web_monitor_YYYYMMDD.log)
+        try:
+            import logger as _logger_mod
+            _logger_mod.archive_log(dump_date)
+        except Exception as e:
+            log.error(f"log archive error: {e}")
 
     def _archive_html(self, dump_date):
         """ssf_mm / ssf_mm2 / sso_mm 스냅샷을 archive/ 폴더에 날짜 접미사로 저장."""
@@ -469,9 +521,17 @@ class DashboardMonitor:
             generate_html(os.path.join(archive_dir, f"ssf_mm_{date_str}.html"), open_browser=False)
             generate_html_idx(os.path.join(archive_dir, f"ssf_mm2_{date_str}.html"), open_browser=False)
             reader_sso.generate_html(os.path.join(archive_dir, f"sso_mm_{date_str}.html"), open_browser=False)
-            print(f"[ssf_monitor] archive saved → ssf_mm_{date_str}.html, ssf_mm2_{date_str}.html, sso_mm_{date_str}.html")
+            log.warning(f"archive saved → ssf_mm_{date_str}.html, ssf_mm2_{date_str}.html, sso_mm_{date_str}.html")
         except Exception as e:
-            print(f"[ssf_monitor] archive error: {e}")
+            log.error(f"archive error: {e}")
+
+    def _refresh_db_ok(self):
+        """DB 연결 가능 여부를 확인해 _db_ok 플래그 업데이트 (별도 스레드에서 호출)."""
+        try:
+            self._get_db_conn()
+            self._db_ok = True
+        except Exception:
+            self._db_ok = False
 
     def _print_status(self):
         now_str = datetime.datetime.now().strftime("%H:%M:%S")
@@ -482,20 +542,14 @@ class DashboardMonitor:
         if not self._read_ok:
             issues.append("Excel 읽기 실패")
 
-        # DB 상태
+        # DB 상태 (_db_ok 플래그만 읽음 — 네트워크 I/O 없음)
         if not self.db_save_enabled:
-            db_str = "DB:OFF(nosave)"
+            db_str = "DB:OFF"
+        elif self._db_ok:
+            db_str = "DB:OK"
         else:
-            try:
-                conn = self._get_db_conn()
-                db_ok = conn.is_connected()
-            except Exception:
-                db_ok = False
-            if db_ok:
-                db_str = "DB:OK"
-            else:
-                db_str = "DB:ERR ⚠"
-                issues.append("MySQL 연결 안됨")
+            db_str = "DB:ERR ⚠"
+            issues.append("MySQL 연결 안됨")
 
         # SSE 클라이언트 수
         with self._clients_lock:
@@ -514,8 +568,9 @@ class DashboardMonitor:
         changes = self._changes_since
         self._changes_since = 0
 
-        status = "OK" if not issues else " / ".join(issues)
-        print(f"[status] {now_str} | {xl_str} | {db_str} | 클라이언트:{n_clients} | 변경:{changes}건/30s{load_str} | {status}")
+        run_str = "SSF:실행중" if self._running else "SSF:중지"
+        status  = "OK" if not issues else " / ".join(issues)
+        log.info(f"{run_str} | {xl_str} | {db_str} | 클라이언트:{n_clients} | 변경:{changes}건/30s{load_str} | {status}")
 
     def _push(self, payload_str):
         with self._clients_lock:
@@ -527,16 +582,15 @@ class DashboardMonitor:
                 self._clients.remove(q)
 
     def _get_ws(self):
-        path = os.path.join(BASE_DIR, BOOK_NAME)
-        try:
-            com_wb = win32com.client.GetObject(path)
-            return com_wb.Sheets("DashBoard")
-        except Exception:
-            pass
-        xl = win32com.client.Dispatch("Excel.Application")
-        xl.Visible = True
-        com_wb = xl.Workbooks.Open(path)
-        return com_wb.Sheets("DashBoard")
+        """실행 중인 Excel에서 BOOK_NAME 워크북을 이름으로 찾아 DashBoard 시트 반환.
+        GetObject(path) 대신 GetActiveObject 사용 — OneDrive 경로 불일치 문제 회피.
+        """
+        xl = win32com.client.GetActiveObject("Excel.Application")
+        for i in range(1, xl.Workbooks.Count + 1):
+            wb = xl.Workbooks.Item(i)
+            if wb.Name == BOOK_NAME:
+                return wb.Sheets("DashBoard")
+        raise RuntimeError(f"'{BOOK_NAME}' 파일이 Excel에서 열려있지 않음")
 
     def _read_full(self, ws):
         # B2:AL44 단일 COM 호출 — 헤더·MM·IDX 전 영역 커버
@@ -568,6 +622,15 @@ class DashboardMonitor:
         ws        = None
 
         while True:
+            if not self._running:
+                if ws is not None:
+                    ws        = None   # COM 참조 해제
+                    prev_data = None
+                    self._read_ok = False
+                self._wake.wait(timeout=0.5)
+                self._wake.clear()
+                continue
+
             try:
                 if ws is None:
                     ws = self._get_ws()
@@ -583,8 +646,10 @@ class DashboardMonitor:
                     _now = datetime.datetime.now()
                     if (_now.hour, _now.minute) >= DB_DUMP_TIME:
                         self._dumped_date = _now.date()
-                    print("[ssf_monitor] initial load done")
-                    time.sleep(1.0)
+                    log.warning("initial load done")
+                    threading.Thread(target=self._refresh_db_ok, daemon=True).start()
+                    self._wake.wait(timeout=1.0)
+                    self._wake.clear()
                     continue
 
                 changes = []
@@ -617,7 +682,7 @@ class DashboardMonitor:
                 self._push(json.dumps({"cells": changes, "updated": now_str}))
                 self._changes_since += len(changes)
                 if changes:
-                    print(f"[ssf_monitor] {now_str} — pushed {len(changes)} changes")
+                    log.info(f"{now_str} — pushed {len(changes)} changes")
 
                 # 30초마다 상태 출력
                 if time.time() - self._last_status_ts >= 30:
@@ -629,29 +694,41 @@ class DashboardMonitor:
                     today = now.date()
                     hhmm  = (now.hour, now.minute)
                     if DB_SAVE_START <= hhmm <= DB_SAVE_END:
-                        self._save_to_db(data, time.time())
+                        # DB 저장을 별도 스레드로 — run() 루프 블로킹 방지
+                        _t = threading.Thread(
+                            target=self._save_to_db,
+                            args=(data, time.time()),
+                            daemon=True,
+                        )
+                        _t.start()
                     if hhmm >= DB_DUMP_TIME and self._dumped_date != today:
-                        self._dump_and_cleanup(today)
-                        self._dumped_date = today
+                        self._dumped_date = today   # 먼저 설정해 중복 실행 방지
+                        threading.Thread(
+                            target=self._dump_and_cleanup,
+                            args=(today,),
+                            daemon=True,
+                        ).start()
 
                 prev_data = data
 
             except pywintypes.com_error as e:
                 hresult = e.args[0] if e.args else 0
                 if hresult in _COM_BUSY:
-                    time.sleep(0.5)
+                    self._wake.wait(timeout=0.5)
+                    self._wake.clear()
                     continue
-                print(f"[ssf_monitor] com_error: {e}")
+                log.error(f"com_error: {e}")
                 self._read_ok = False
                 prev_data = None
                 ws        = None
             except Exception as e:
-                print(f"[ssf_monitor] error: {e}")
+                log.error(f"error: {e}")
                 self._read_ok = False
                 prev_data = None
                 ws        = None
 
-            time.sleep(1.0)
+            self._wake.wait(timeout=1.0)
+            self._wake.clear()
 
 
 monitor = DashboardMonitor()
@@ -748,7 +825,7 @@ def generate_html(out_path=None, open_browser=True):
 
     with open(out_path, "w", encoding="utf-8") as f:
         f.write(html)
-    print(f"[reader_ssf] saved → {out_path}")
+    log.info(f"saved → {out_path}")
     if open_browser:
         webbrowser.open("file:///" + out_path.replace("\\", "/"))
 
@@ -821,7 +898,7 @@ def generate_html_idx(out_path=None, open_browser=True):
 
     with open(out_path, "w", encoding="utf-8") as f:
         f.write(html)
-    print(f"[reader_ssf] saved → {out_path}")
+    log.info(f"saved → {out_path}")
     if open_browser:
         webbrowser.open("file:///" + out_path.replace("\\", "/"))
 

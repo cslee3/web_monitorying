@@ -128,10 +128,10 @@
       overflow: hidden;
     }
 
-    iframe { 
-      width: 112%; 
-      height: 112%; 
-      transform: scale(0.89);
+    iframe {
+      width: 106%;
+      height: 106%;
+      transform: scale(0.95);
       transform-origin: top left;
       border: none;
     }
@@ -146,27 +146,22 @@
       <h2>
         <a onclick="goHome()" class="home-link">Home</a>
       </h2>
+      <h2 style="color:#FFB347;">PnL Report</h2>
+      <a onclick="loadPnlReport()">PnL Report</a>
+      <h2></h2>
       <h2 style="color:#FFB347;">Market Making</h2>
       <a onclick="loadPage('ssf_mm.html', 'SSF MM')">SSF MM</a>
       <a onclick="loadPage('ssf_mm2.html', 'SSF MM2')">SSF MM2</a>
       <a onclick="loadPage('sso_mm.html', 'SSO MM')">SSO MM</a>
       <a onclick="loadPage('ssfo_score.html', 'MM Score')">MM Score</a>
-      <h2></h2>
-      <h2 style="color:#FFB347;">Arb Trading</h2>
-      <a onclick="loadPage('ssf_arb.html', 'SSF Arb')">SSF Arb</a>
-      <a onclick="loadPage('arb_trading_report.html', 'ETP Arb')">ETP Arb</a>
-      <a onclick="loadPage('sso_syn_report.html', 'SSO Syn Arb')">SSO Syn Arb</a>
-      <h2></h2>
-      <h2 style="color:#FFB347;">PnL Report</h2>
-      <a onclick="loadPage('PnL_Report.html', 'PnL_Report')">PnL Report</a>
     </div>
 
     <div class="main">
       <div class="topbar">
         <span id="pageTitle">
-          Multi Asset Webpage
+          GMT Market Making Part
         </span>
-        <label class="date-label" lang="en" style="margin-left:16px; font-size:14px;">
+        <label id="dateLabel" class="date-label" lang="en" style="margin-left:16px; font-size:14px; display:none;">
           Date
         <input type="date" id="datePicker" style="margin-left:8px; padding:4px 6px;" lang="en" onchange="loadArchivePage()" />
       </label>
@@ -182,6 +177,77 @@
     let currentPage = "";
     let autoRefreshId = null;
 
+    // PnL 파일명 대소문자 무관하게 후보 순서대로 시도
+    function _loadPnlUrl(dateStr, displayDate) {
+      const candidates = [
+        `archive/PnL_Report_${dateStr}.html`,
+        `archive/PNL_REPORT_${dateStr}.html`,
+      ];
+      const f = document.getElementById("mainFrame");
+      const noDataMsg = `<html><body style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:'Segoe UI',sans-serif;color:#888;font-size:16px">해당 일자 데이터가 없습니다 (${displayDate})</body></html>`;
+
+      function tryNext(i) {
+        if (i >= candidates.length) { f.srcdoc = noDataMsg; return; }
+        fetch(candidates[i], { method: "HEAD" })
+          .then(res => {
+            if (res.ok) {
+              f.removeAttribute("srcdoc");
+              f.src = candidates[i] + `?_=${Date.now()}`;
+            } else {
+              tryNext(i + 1);
+            }
+          })
+          .catch(() => { tryNext(i + 1); });
+      }
+      tryNext(0);
+    }
+
+    function loadPnlReport() {
+      currentPage = "PNL_REPORT";
+
+      const titleEl = document.getElementById("pageTitle");
+      if (titleEl) titleEl.textContent = "PnL Report";
+
+      const links = document.querySelectorAll(".sidebar a");
+      links.forEach(link => link.classList.remove("active"));
+      event.target.classList.add("active");
+
+      if (autoRefreshId) { clearInterval(autoRefreshId); autoRefreshId = null; }
+
+      // 서버에서 가장 최신 PnL 날짜 조회 후 로드
+      fetch("/api/archive/pnl/latest")
+        .then(r => r.json())
+        .then(data => {
+          const dp = document.getElementById("datePicker");
+          if (data.date) {
+            // YYYYMMDD → YYYY-MM-DD
+            const d = data.date;
+            const isoDate = `${d.slice(0,4)}-${d.slice(4,6)}-${d.slice(6,8)}`;
+            if (dp) dp.value = isoDate;
+            _loadPnlUrl(d, isoDate);
+          } else {
+            // 파일 없으면 오늘 날짜로 시도
+            const _n = new Date();
+            const dateStr = String(_n.getFullYear()) +
+                            String(_n.getMonth()+1).padStart(2,"0") +
+                            String(_n.getDate()).padStart(2,"0");
+            const isoDate = `${_n.getFullYear()}-${String(_n.getMonth()+1).padStart(2,"0")}-${String(_n.getDate()).padStart(2,"0")}`;
+            if (dp) dp.value = isoDate;
+            _loadPnlUrl(dateStr, isoDate);
+          }
+        })
+        .catch(() => {
+          // 서버 응답 없으면 오늘 날짜 fallback
+          const _n = new Date();
+          const dateStr = String(_n.getFullYear()) +
+                          String(_n.getMonth()+1).padStart(2,"0") +
+                          String(_n.getDate()).padStart(2,"0");
+          const dp = document.getElementById("datePicker");
+          if (dp) dp.value = `${_n.getFullYear()}-${String(_n.getMonth()+1).padStart(2,"0")}-${String(_n.getDate()).padStart(2,"0")}`;
+          _loadPnlUrl(dateStr, dateStr);
+        });
+    }
+
     function loadArchivePage() {
       const dp = document.getElementById("datePicker");
       if (!dp || !currentPage) return;
@@ -195,6 +261,12 @@
       // 자동 새로고침 중단
       if (autoRefreshId) { clearInterval(autoRefreshId); autoRefreshId = null; }
 
+      // PnL Report: 대소문자 무관하게 후보 순서대로 시도
+      if (currentPage === "PNL_REPORT") {
+        _loadPnlUrl(dateStr || today, dp.value);
+        return;
+      }
+
       // 오늘 날짜면 라이브 페이지
       if (!dateStr || dateStr === today) {
         loadPage(currentPage, document.getElementById("pageTitle")?.textContent || "");
@@ -206,15 +278,13 @@
 
       fetch(archiveUrl, { method: "HEAD" })
         .then(res => {
+          const f = document.getElementById("mainFrame");
           if (res.ok) {
-            const f = document.getElementById("mainFrame");
             f.removeAttribute("srcdoc");
             f.src = archiveUrl;
           } else {
-            const msg = `<html><body style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:'Segoe UI',sans-serif;color:#888;font-size:16px">` +
-                        `해당 일자 데이터가 없습니다 (${dp.value})</body></html>`;
-            document.getElementById("mainFrame").src = "about:blank";
-            document.getElementById("mainFrame").srcdoc = msg;
+            f.srcdoc = `<html><body style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:'Segoe UI',sans-serif;color:#888;font-size:16px">` +
+                       `해당 일자 데이터가 없습니다 (${dp.value})</body></html>`;
           }
         })
         .catch(() => {
@@ -246,12 +316,14 @@
 
       // 달력(datePicker) 초기화 → 오늘 날짜로 설정 (로컬 날짜 기준)
       const dp = document.getElementById("datePicker");
+      const dl = document.getElementById("dateLabel");
       if (dp) {
         const _n = new Date();
         dp.value = String(_n.getFullYear()) + "-" +
                    String(_n.getMonth() + 1).padStart(2, "0") + "-" +
                    String(_n.getDate()).padStart(2, "0");
       }
+      if (dl) dl.style.display = "";
 
       // SSF MM만 축소 표시
       if (page === "ssf_mm.html") {
@@ -288,8 +360,12 @@
       // 상단 타이틀 초기화
       const titleEl = document.getElementById("pageTitle");
       if (titleEl) {
-        titleEl.textContent = "Multi Asset Webpage";
+        titleEl.textContent = "GMT Market Making Part";
       }
+
+      // 날짜 picker 숨기기
+      const dl = document.getElementById("dateLabel");
+      if (dl) dl.style.display = "none";
 
       // 사이드바 active 초기화
       const links = document.querySelectorAll(".sidebar a");

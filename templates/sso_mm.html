@@ -83,6 +83,7 @@
   <span class="dot" id="liveDot"></span>
   <div style="font-size:11px; font-weight:bold;">SSO MM</div>
   <div class="updated">Updated: <span id="hUpdated">-</span></div>
+  <span id="monState" style="font-size:11px;color:#2ecc71;font-weight:bold;">● 실행중</span>
 </div>
 
 <div id="status">데이터 로딩 중...</div>
@@ -112,6 +113,18 @@
 <script>
 /* ── 상태 ─────────────────────────────────────────────────────────── */
 const CS_CIDX    = new Set([8, 10]);  // Theo PnL, MTM PnL
+
+function setMonState(running) {
+  const dot   = document.getElementById("liveDot");
+  const state = document.getElementById("monState");
+  if (running) {
+    if (state) { state.textContent = "● 실행중"; state.style.color = "#2ecc71"; }
+  } else {
+    if (dot)   { dot.className = "dot"; }
+    if (state) { state.textContent = "● 중지"; state.style.color = "#e74c3c"; }
+  }
+}
+
 let numCidx      = new Set();
 let colOrder     = [];
 let es           = null;
@@ -206,7 +219,9 @@ function connectStream() {
 
   es.onmessage = e => {
     const d = JSON.parse(e.data);
-    if (d.type === "connected") return;
+    if (d.type === "connected") { setMonState(d.running); return; }
+    if (d.type === "monitor_paused")  { setMonState(false); return; }
+    if (d.type === "monitor_resumed") { setMonState(true);  return; }
     applyChanges(d.cells, d.updated);
   };
 
