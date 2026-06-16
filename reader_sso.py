@@ -421,9 +421,9 @@ def generate_html(out_path=None, open_browser=True, _data=None):
 <style>
   body {{ margin:0; padding:8px; font-family:'Segoe UI',sans-serif; font-size:12px; }}
   .ts {{ text-align:right; color:#888; font-size:11px; margin-bottom:6px; }}
-  table {{ border-collapse:collapse; white-space:nowrap; }}
-  th {{ background:#202123; color:#fff; padding:4px 8px; font-size:11px;
-        text-align:center; border:1px solid #444; }}
+  table {{ border-collapse:collapse; white-space:nowrap; outline:1px solid #000; outline-offset:-1px; }}
+  th {{ background:#DEE7ED; color:#000; font-weight:bold; padding:4px 8px; font-size:11px;
+        text-align:center; border:1px solid #b6c2cc; border-bottom:1px solid #000; }}
   td {{ padding:2px 8px; border:1px solid #e0e0e0; }}
   tr:hover td {{ background:#fffde7 !important; }}
 </style></head><body>

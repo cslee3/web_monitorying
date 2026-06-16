@@ -41,7 +41,7 @@ MM_COLS = [
     # cidx 8 = J열 Ask  (Excel 숨김)
     # cidx 9 = K열 Bid  (Excel 숨김)
     (10, "MM Spread",     lambda v: str(v) if v else ""),
-    (11, "Volume Score",  lambda v: _num(v, 2)),
+    (11, "Vol Score",     lambda v: _num(v, 2)),
     (12, "△Shares",       lambda v: _num(v, 0)),
     (13, "Diff",          lambda v: _num(v, 0)),
     # cidx 14 = O열 Vol(Lots) (Excel 숨김)
@@ -69,7 +69,7 @@ MM_COL_SUBS = {
     12: "△Shares",
     15: "Volume (Mkrw)",
     16: "Delta (Shares)",
-    17: "Delta (Mil KRW)",
+    17: "Delta (Mil)",
     20: "Ex1 B-Spread",
     21: "Ex1 S-Spread",
     22: "Theo Basis",
@@ -91,15 +91,16 @@ MM_SECTIONS = [
 # IDX2 섹션 (has_header: True면 첫 번째 행을 헤더로 처리)
 # text_ci: 문자열 그대로 표시할 relative column index (숫자 포맷 제외)
 IDX2_SECTIONS = [
-    {"id": "idx1", "row_s":  3, "row_e":  9, "col_s": 30, "col_e": 36, "has_header": True,  "text_ci": {0, 1, 2}},  # AF5:AL11
+    {"id": "idx1", "row_s":  3, "row_e": 10, "col_s": 30, "col_e": 36, "has_header": True,  "text_ci": {0, 1, 2}},  # AF5:AL12 (합계 포함)
     {"id": "idx2", "row_s": 11, "row_e": 11, "col_s": 30, "col_e": 31, "has_header": False, "text_ci": {0, 1}, "empty_dash": True},  # AF13:AG13
     {"id": "idx3", "row_s": 12, "row_e": 13, "col_s": 30, "col_e": 36, "has_header": False, "text_ci": {0, 1, 2},
      "header": ["IdxCode", "IndexName", "Fund", "Delta", "Volume", "MTM PnL", "Theo PnL"]},                           # AF14:AL15
     {"id": "idx4", "row_s": 15, "row_e": 16, "col_s": 30, "col_e": 36, "has_header": False, "text_ci": {0, 1, 2},
      "header": ["IdxCode", "IndexName", "Fund", "Delta", "Volume", "MTM PnL", "Theo PnL"]},                           # AF17:AL18
-    {"id": "idx5", "row_s": 18, "row_e": 23, "col_s": 30, "col_e": 36, "has_header": True,  "text_ci": {0, 1, 2}, "colorscale": False},  # AF20:AL25
+    {"id": "idxS", "row_s": 17, "row_e": 17, "col_s": 35, "col_e": 36, "has_header": False, "text_ci": {0}},  # AK19:AL19 (Sector PnL | 값)
+    {"id": "idx5", "row_s": 18, "row_e": 25, "col_s": 30, "col_e": 36, "has_header": True,  "text_ci": {0, 1, 2}, "colorscale": False},  # AF20:AL27 (A0169000/K200 Basket 포함)
     {"id": "idx6", "row_s": 27, "row_e": 36, "col_s": 30, "col_e": 36, "has_header": True,  "text_ci": {0, 1, 2}, "theo_pnl_rci": 5, "skip_rows": {35}},  # AF29:AL38 (row35=Excel37 빈행 스킵)
-    {"id": "idx7", "row_s": 42, "row_e": 42, "col_s": 33, "col_e": 35, "has_header": False, "text_ci": {0}, "skip_rci": {1}},  # AI44:AK44 (AJ 빈 열 스킵)
+    {"id": "idx7", "row_s": 42, "row_e": 42, "col_s": 35, "col_e": 36, "has_header": False, "text_ci": {0}},  # AK44:AL44 (Expected PnL | 값)
 ]
 
 TOTAL_VALS = {"합계", "합 계", "Total", "소계"}
@@ -811,6 +812,8 @@ monitor = DashboardMonitor()
 # ── 단독 실행: 스냅샷 HTML 생성 ──────────────────────────────────────────
 
 _SPREAD_CIDX_SET = {20, 21, 23, 24}
+# 굵은 세로선(오른쪽 테두리) 적용 컬럼
+_VLINE_CIDX = {1, 3, 4, 6, 7, 10, 11, 12, 13, 15, 17, 18, 19, 21, 22, 24}
 
 def _spread_style_py(sp, last_price):
     """스냅샷용 spread 셀 인라인 스타일 반환."""
@@ -844,9 +847,10 @@ def generate_html(out_path=None, open_browser=True, _data=None):
 
     # 헤더 (sub 포함)
     ths = ""
-    for _, hdr, sub in cols:
+    for cidx, hdr, sub in cols:
         sub_html = f'<span style="display:block;font-weight:normal;font-size:9px;opacity:0.65">{sub}</span>' if sub else ""
-        ths += f"<th>{hdr}{sub_html}</th>"
+        vline = ' style="border-right:1px solid #000"' if cidx in _VLINE_CIDX else ""
+        ths += f"<th{vline}>{hdr}{sub_html}</th>"
 
     tbody = ""
     for si, sec in enumerate(mm_sections):
@@ -857,24 +861,62 @@ def generate_html(out_path=None, open_browser=True, _data=None):
             last_price = 0
             try: last_price = float(str(row.get("2", {}).get("v", "0")).replace(",", "")) or 0
             except: pass
+            if meta.get("total"):
+                # 합계: 앞 2칼럼(Stock+StockName) 병합, 라벨 가운데 정렬
+                label = ""
+                for cc in (cols[0][0], cols[1][0]):
+                    lv = row.get(str(cc), {}).get("v", "")
+                    if str(lv).strip():
+                        label = lv
+                        break
+                tb = "font-weight:bold;border-top:1px solid #000;border-bottom:1px solid #000;box-shadow:inset 0 1px 0 #000;"
+                tds = f'<td colspan="2" style="{tb}text-align:center;background:#e2efda;border-right:1px solid #000;">{label}</td>'
+                for cidx, *_ in cols[2:]:
+                    v     = row.get(str(cidx), {"v": ""})["v"]
+                    align = "center" if cidx == 10 else ("right" if cidx in num_set else "left")
+                    vline = "border-right:1px solid #000;" if cidx in _VLINE_CIDX else ""
+                    tds += f'<td style="{tb}{vline}text-align:{align};background:#fff;">{v}</td>'
+                tbody += f"<tr>{tds}</tr>"
+                continue
             tds = ""
             for cidx, *_ in cols:
                 cell  = row.get(str(cidx), {"v": "", "bg": ""})
                 v     = cell["v"]
                 bg    = cell.get("bg", "")
-                align = "right" if cidx in num_set else "left"
+                align = "center" if cidx == 10 else ("right" if cidx in num_set else "left")
                 bold  = "font-weight:bold;" if meta.get("total") else ""
+                topb  = "border-top:1px solid #000;border-bottom:1px solid #000;box-shadow:inset 0 1px 0 #000;" if meta.get("total") else ""
+                vline = "border-right:1px solid #000;" if cidx in _VLINE_CIDX else ""
+                amtw  = "width:56px;min-width:56px;max-width:56px;" if cidx in (5, 6) else ""
+                if cidx in (19, 22): amtw += "min-width:50px;"
                 extra = ""
                 if cidx == 10 and v == "Alert":
                     extra = "background:#ffff00;color:#cc0000;font-weight:bold;"
                 elif cidx in _SPREAD_CIDX_SET:
                     try: extra = _spread_style_py(float(v.replace(",", "")), last_price)
                     except: pass
+                elif cidx == 3:
+                    try:
+                        n = float(v.replace("%", "").replace(",", ""))
+                        if n > 0:   extra = "color:#ff0000;"
+                        elif n < 0: extra = "color:#0000ff;"
+                    except: pass
+                elif cidx == 12:
+                    try:
+                        n = float(v.replace(",", ""))
+                        extra = "color:#ff0000;" if n < 0 else "color:#000;"
+                    except: pass
+                elif cidx in (5, 6):
+                    try:
+                        if float(v.replace(",", "")) < 0: extra = "color:#ff0000;"
+                    except: pass
                 elif bg:
                     extra = f"background:{bg};"
-                tds += f'<td style="{bold}text-align:{align};{extra}">{v}</td>'
-            row_cls = ' style="background:#e2efda;font-weight:bold"' if meta.get("total") else ""
-            tbody += f"<tr{row_cls}>{tds}</tr>"
+                # 합계 행: "합계" 셀만 녹색, 나머지는 회색
+                if meta.get("total"):
+                    extra = "background:#e2efda;" if v.strip() == "합계" else "background:#D9D9D9;"
+                tds += f'<td style="{bold}{topb}{vline}{amtw}text-align:{align};{extra}">{v}</td>'
+            tbody += f"<tr>{tds}</tr>"
         if si < len(mm_sections) - 1:
             tbody += f'<tr><td colspan="{len(cols)}" style="height:5px;background:#f0f0f0"></td></tr>'
 
@@ -886,8 +928,8 @@ def generate_html(out_path=None, open_browser=True, _data=None):
   .info {{ display:flex; gap:20px; padding:5px 10px; background:#eef2f6; margin-bottom:6px; font-size:11px; }}
   .info span {{ font-weight:bold; }}
   .ts {{ margin-left:auto; color:#888; }}
-  table {{ border-collapse:collapse; white-space:nowrap; }}
-  th {{ background:#202123; color:#fff; padding:4px 7px; font-size:11px; text-align:center; border:1px solid #444; vertical-align:bottom; }}
+  table {{ border-collapse:collapse; white-space:nowrap; outline:1px solid #000; outline-offset:-1px; }}
+  th {{ background:#202123; color:#fff; padding:4px 7px; font-size:11px; text-align:center; border:1px solid #444; border-bottom:1px solid #000; vertical-align:bottom; }}
   td {{ padding:2px 6px; border:1px solid #e0e0e0; }}
   tr:hover td {{ background:#fffde7 !important; }}
 </style></head><body>
@@ -910,6 +952,12 @@ def generate_html(out_path=None, open_browser=True, _data=None):
 
 
 _SUBHDR_VALS = {"△Amount", "Strike", "Theo PnL", "MTM PnL"}
+# 회색 배경 적용 컬럼 헤더 (IdxCode/IndexName/Fund/Udly)
+_GRAY_HDRS = {"IdxCode", "IndexCode", "IndexName", "Fund", "Udly"}
+# 세로줄(오른쪽 1px 검정) 적용 컬럼 헤더 (Fund/Volume/Udly)
+_VLINE_HDRS = {"Fund", "Volume", "Udly"}
+# 양옆(좌우) 1px 세로줄 적용 컬럼 헤더 (△Shares) — 자기+왼쪽 칼럼에 right-border
+_VLINE_BOTH_HDRS = {"△Shares"}
 
 def generate_html_idx(out_path=None, open_browser=True, _data=None):
     """IDX2 섹션 스냅샷 HTML 생성.
@@ -937,29 +985,77 @@ def generate_html_idx(out_path=None, open_browser=True, _data=None):
         is_idx7 = sec["id"] == "idx7"
         is_idx5 = sec["id"] == "idx5"
 
-        start_row  = 0
-        thead_html = ""
-        if sec["has_header"]:
-            thead_html = "<thead><tr>" + "".join(f"<th>{cell['v']}</th>" for cell in rows[0]) + "</tr></thead>"
-            start_row  = 1
-        elif sec.get("header"):
-            thead_html = "<thead><tr>" + "".join(f"<th>{h}</th>" for h in sec["header"]) + "</tr></thead>"
+        # 컬럼 판별 (회색 / 세로줄)
+        header_vals = [c["v"] for c in rows[0]] if sec["has_header"] else (sec.get("header") or [])
+        gray_ci  = {i for i, h in enumerate(header_vals) if str(h).strip() in _GRAY_HDRS}
+        vline_ci = {i for i, h in enumerate(header_vals) if str(h).strip() in _VLINE_HDRS}
+        for i, h in enumerate(header_vals):
+            if str(h).strip() in _VLINE_BOTH_HDRS:
+                vline_ci.add(i)
+                if i > 0:
+                    vline_ci.add(i - 1)
+        # idx6(Udly 표) Delta/Gamma/Amt 오른쪽 세로줄
+        if sec["id"] == "idx6":
+            for i, h in enumerate(header_vals):
+                if str(h).strip() in ("Delta", "Gamma", "Amt"):
+                    vline_ci.add(i)
+        if sec["id"] in ("idx2", "idxS"):
+            gray_ci.add(0)
+        if sec["id"] in ("idx2", "idxS", "idx7"):
+            vline_ci.add(0)
+
+        start_row = 1 if sec["has_header"] else 0
+        if header_vals:
+            ths = ""
+            for i, h in enumerate(header_vals):
+                vl = ' style="border-right:1px solid #000"' if i in vline_ci else ""
+                ths += f"<th{vl}>{h}</th>"
+            thead_html = f"<thead><tr>{ths}</tr></thead>"
+        else:
+            thead_html = ""
 
         tbody = ""
         for ri in range(start_row, len(rows)):
+            row = rows[ri]
+            is_total = bool(row) and str(row[0].get("v", "")).strip() == "합계"
+            if is_total:
+                # 합계: 앞 3칼럼(IdxCode·IndexName·Fund) 병합, 가운데 정렬
+                span = min(3, len(row))
+                merge_vline = "border-right:1px solid #000;" if (span - 1) in vline_ci else ""
+                tds = f'<td colspan="{span}" style="background:#e2efda;font-weight:bold;text-align:center;box-shadow:inset 0 1px 0 #000;{merge_vline}">합계</td>'
+                for ci in range(span, len(row)):
+                    vl = "border-right:1px solid #000;" if ci in vline_ci else ""
+                    tds += f'<td style="background:#fff;font-weight:bold;box-shadow:inset 0 1px 0 #000;{vl}">{row[ci]["v"]}</td>'
+                tbody += f"<tr>{tds}</tr>"
+                continue
+            is_cost_row = any(str(c.get("v", "")).strip() == "Cost" for c in row)
+            u0 = str(row[0].get("v", "")).strip() if row else ""
+            # 가로줄: Cost 위아래 / idx6 KSQ150 위 / idx6 맨 아랫줄(합산) 위
+            top_line    = is_cost_row or (sec["id"] == "idx6" and (u0 == "KSQ150" or ri == len(rows) - 1))
+            bottom_line = is_cost_row or (sec["id"] == "idx3" and u0 == "K2G01P")
+            _sh = []
+            if top_line:    _sh.append("inset 0 1px 0 #000")
+            if bottom_line: _sh.append("inset 0 -1px 0 #000")
+            box_shadow = ("box-shadow:" + ",".join(_sh)) if _sh else ""
             tds = ""
-            for ci, cell in enumerate(rows[ri]):
+            for ci, cell in enumerate(row):
                 v  = cell["v"]
                 bg = cell.get("bg", "")
                 style = ""
                 if is_idx7 and ci == 0:
-                    style = "background:#202123;color:#fff;font-weight:bold"
+                    style = "background:#DEE7ED;color:#000;font-weight:bold"
                 elif is_idx5 and v in _SUBHDR_VALS:
-                    style = "background:#202123;color:#fff;font-weight:bold"
+                    style = "background:#DEE7ED;color:#000;font-weight:bold;box-shadow:inset 0 0 0 1px #000"
                 elif ci == 0 and v == "Alert":
-                    style = "background:#ffff00;color:#cc0000;font-weight:bold"
+                    style = "background:#ffff00;color:#cc0000;font-weight:bold;text-align:center"
                 elif bg:
                     style = f"background:{bg}"
+                elif ci in gray_ci and not (is_cost_row and ci < 2):
+                    style = "background:#D9D9D9"
+                if ci in vline_ci and not (is_cost_row and str(v).strip() == "Cost") and not (is_idx5 and v in _SUBHDR_VALS):
+                    style += (";" if style else "") + "border-right:1px solid #000"
+                if box_shadow:
+                    style += (";" if style else "") + box_shadow
                 tds += f'<td{f" style=\"{style}\"" if style else ""}>{v}</td>'
             tbody += f"<tr>{tds}</tr>"
 
@@ -971,8 +1067,8 @@ def generate_html_idx(out_path=None, open_browser=True, _data=None):
 <style>
   body {{ margin:0; padding:8px; font-family:'Segoe UI',sans-serif; font-size:12px; }}
   .ts {{ text-align:right; color:#888; font-size:11px; margin-bottom:6px; }}
-  table {{ border-collapse:collapse; white-space:nowrap; }}
-  th {{ background:#202123; color:#fff; padding:4px 7px; font-size:11px; text-align:center; border:1px solid #444; }}
+  table {{ border-collapse:collapse; white-space:nowrap; outline:1px solid #000; outline-offset:-1px; }}
+  th {{ background:#DEE7ED; color:#000; font-weight:bold; padding:4px 7px; font-size:11px; text-align:center; border:1px solid #b6c2cc; border-bottom:1px solid #000; }}
   td {{ padding:2px 6px; border:1px solid #e0e0e0; }}
   tr:hover td {{ background:#fffde7 !important; }}
 </style></head><body>

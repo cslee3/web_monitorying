@@ -35,14 +35,14 @@
 
   .table-section { display: inline-block; }
 
-  table { border-collapse: collapse; white-space: nowrap; }
+  table { border-collapse: collapse; white-space: nowrap; outline: 1px solid #000; outline-offset: -1px; }
   thead th {
-    background: #202123; color: #fff; padding: 4px 7px;
-    font-size: 11px; text-align: center; border: 1px solid #444;
+    background: #DEE7ED; color: #000; font-weight: bold; padding: 4px 7px;
+    font-size: 11px; text-align: center; border: 1px solid #b6c2cc; border-bottom: 1px solid #000;
   }
   td { padding: 2px 6px; border: 1px solid #e0e0e0; text-align: right; }
   tr:hover td { background: #fffde7 !important; }
-  .total-row td { background: #e2efda !important; font-weight: bold; }
+  .total-row td { font-weight: bold; }
 
 
   #status { padding: 40px; text-align: center; color: #888; font-size: 14px; }
@@ -70,6 +70,13 @@
 <script>
 let es = null;
 let wasError = false;
+
+// 회색 배경 적용 컬럼 헤더 (IdxCode/IndexName/Fund/Udly)
+const GRAY_HDRS = new Set(["IdxCode", "IndexCode", "IndexName", "Fund", "Udly"]);
+// 세로줄(오른쪽 1px 검정) 적용 컬럼 헤더 (Fund/Volume/Udly)
+const VLINE_HDRS = new Set(["Fund", "Volume", "Udly"]);
+// 양옆(좌우) 1px 세로줄 적용 컬럼 헤더 (△Shares) — 자기+왼쪽 칼럼에 right-border
+const VLINE_BOTH_HDRS = new Set(["△Shares"]);
 
 function setMonState(running) {
   const dot   = document.getElementById("liveDot");
@@ -116,30 +123,73 @@ function buildTables(d) {
     const rows = sec.rows;
     if (!rows.length) continue;
 
-    let theadHtml = "";
-    let startRow  = 0;
-    if (sec.has_header) {
-      theadHtml = "<thead><tr>" + rows[0].map(cell => `<th>${cell.v}</th>`).join("") + "</tr></thead>";
-      startRow  = 1;
-    } else if (sec.header) {
-      theadHtml = "<thead><tr>" + sec.header.map(v => `<th>${v}</th>`).join("") + "</tr></thead>";
-    }
+    const headerVals = sec.has_header ? rows[0].map(c => c.v) : (sec.header || []);
+    const grayCi  = new Set();
+    const vlineCi = new Set();
+    headerVals.forEach((h, i) => {
+      const name = String(h).trim();
+      if (GRAY_HDRS.has(name))  grayCi.add(i);
+      if (VLINE_HDRS.has(name)) vlineCi.add(i);
+      if (VLINE_BOTH_HDRS.has(name)) { vlineCi.add(i); if (i > 0) vlineCi.add(i - 1); }
+    });
+    // idx6(Udly 표) Delta/Gamma/Amt 오른쪽 세로줄
+    if (sec.id === "idx6") headerVals.forEach((h, i) => {
+      if (["Delta", "Gamma", "Amt"].includes(String(h).trim())) vlineCi.add(i);
+    });
+    // Q150 Roll(idx2) / Sector PnL(idxS) 라벨 셀도 회색
+    if (sec.id === "idx2" || sec.id === "idxS") grayCi.add(0);
+    // Q150 Roll / Sector PnL / Expected PnL 라벨 오른쪽 세로줄
+    if (sec.id === "idx2" || sec.id === "idxS" || sec.id === "idx7") vlineCi.add(0);
+
+    const startRow  = sec.has_header ? 1 : 0;
+    const theadHtml = headerVals.length
+      ? "<thead><tr>" + headerVals.map((h, i) =>
+          `<th${vlineCi.has(i) ? ' style="border-right:1px solid #000"' : ''}>${h}</th>`).join("") + "</tr></thead>"
+      : "";
 
     const isIdx7 = sec.id === "idx7";
     const SUBHDR_VALS = new Set(["△Amount", "Strike", "Theo PnL", "MTM PnL"]);
     let tbody = "";
     for (let ri = startRow; ri < rows.length; ri++) {
       const row = rows[ri];
+      const isTotal = String((row[0] && row[0].v) || "").trim() === "합계";
+      if (isTotal) {
+        // 합계: 앞 3칼럼(IdxCode·IndexName·Fund) 병합, 가운데 정렬
+        const span = Math.min(3, row.length);
+        const mergeVline = vlineCi.has(span - 1) ? ";border-right:1px solid #000" : "";
+        let cells = `<td colspan="${span}" style="background:#e2efda;text-align:center;box-shadow:inset 0 1px 0 #000${mergeVline}">합계</td>`;
+        for (let ci = span; ci < row.length; ci++) {
+          const vl = vlineCi.has(ci) ? "border-right:1px solid #000;" : "";
+          cells += `<td id="c-${sec.id}-${ri}-${ci}" style="background:#fff;box-shadow:inset 0 1px 0 #000;${vl}">${(row[ci] && row[ci].v) || ""}</td>`;
+        }
+        tbody += `<tr class="total-row">${cells}</tr>`;
+        continue;
+      }
+      const isCostRow = row.some(c => String((c && c.v) || "").trim() === "Cost");
+      const u0 = String((row[0] && row[0].v) || "").trim();
+      // 가로줄: Cost 위아래 / idx6 KSQ150 위 / idx6 맨 아랫줄(합산) 위
+      const topLine    = isCostRow || (sec.id === "idx6" && (u0 === "KSQ150" || ri === rows.length - 1));
+      const bottomLine = isCostRow || (sec.id === "idx3" && u0 === "K2G01P");
+      const _sh = [];
+      if (topLine)    _sh.push("inset 0 1px 0 #000");
+      if (bottomLine) _sh.push("inset 0 -1px 0 #000");
+      const boxShadow = _sh.length ? `box-shadow:${_sh.join(",")}` : "";
       tbody += "<tr>" + row.map((cell, ci) => {
         const v     = cell.v;
         const bg    = cell.bg || "";
         const alert = ci === 0 && v === "Alert";
         let style   = "";
-        if (sec.id === "idx5" && SUBHDR_VALS.has(v)) style = "background:#202123;color:#fff;font-weight:bold";
-        else if (isIdx7 && ci === 0) style = "background:#202123;color:#fff;font-weight:bold";
-        else if (alert)         style = "background:#ffff00;color:#cc0000;font-weight:bold";
+        const gray  = grayCi.has(ci) && !(isCostRow && ci < 2);
+        if (sec.id === "idx5" && SUBHDR_VALS.has(v)) style = "background:#DEE7ED;color:#000;font-weight:bold;box-shadow:inset 0 0 0 1px #000";
+        else if (isIdx7 && ci === 0) style = "background:#DEE7ED;color:#000;font-weight:bold";
+        else if (alert)         style = "background:#ffff00;color:#cc0000;font-weight:bold;text-align:center";
         else if (bg)            style = `background:${bg}`;
-        return `<td id="c-${sec.id}-${ri}-${ci}"${style ? ` style="${style}"` : ""}>${v}</td>`;
+        else if (gray)          style = "background:#D9D9D9";
+        if (vlineCi.has(ci) && !(isCostRow && String(v).trim() === "Cost") && !(sec.id === "idx5" && SUBHDR_VALS.has(v)))
+                                style += (style ? ";" : "") + "border-right:1px solid #000";
+        if (boxShadow)          style += (style ? ";" : "") + boxShadow;
+        const grayAttr = gray ? ' data-gray="1"' : "";
+        return `<td id="c-${sec.id}-${ri}-${ci}"${grayAttr}${style ? ` style="${style}"` : ""}>${v}</td>`;
       }).join("") + "</tr>";
     }
 
@@ -209,12 +259,12 @@ function applyChanges(cells, updated, header) {
         td.style.color      = "#cc0000";
         td.style.fontWeight = "bold";
       } else {
-        td.style.background = "";
+        td.style.background = td.dataset.gray ? "#D9D9D9" : "";
         td.style.color      = "";
         td.style.fontWeight = "";
       }
     } else {
-      td.style.background = bg || "";
+      td.style.background = bg || (td.dataset.gray ? "#D9D9D9" : "");
     }
   }
 

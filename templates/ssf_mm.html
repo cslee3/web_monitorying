@@ -5,7 +5,8 @@
 <title>SSF MM Dashboard</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Segoe UI', sans-serif; font-size: 12px; background: #fff; }
+  html, body { height: 100%; }
+  body { font-family: 'Segoe UI', sans-serif; font-size: 12px; background: #fff; display: flex; flex-direction: column; overflow: hidden; }
 
   .info-bar {
     display: flex; align-items: center; gap: 20px;
@@ -24,19 +25,20 @@
   .dot.live { background: #2ecc71; }
   .dot.error { background: #e74c3c; }
 
-  .table-wrap { overflow: auto; height: calc(100vh - 30px); }
+  .table-wrap { overflow: auto; flex: 1; min-height: 0; }
 
-  table { border-collapse: collapse; white-space: nowrap; }
+  table { border-collapse: collapse; white-space: nowrap; outline: 1px solid #000; outline-offset: -1px; margin-left: 3px; margin-top: 2px; }
   thead th {
-    background: #202123; color: #fff; padding: 4px 7px;
+    background: #DEE7ED; color: #000; font-weight: bold; padding: 3px 3px;
     position: sticky; top: 0; z-index: 5;
-    font-size: 11px; text-align: center; border: 1px solid #444;
+    font-size: 11px; text-align: center; border: 1px solid #b6c2cc; border-bottom: 1px solid #000;
     vertical-align: bottom;
   }
+  thead th.diff-hdr { background: #FFC000; }
   .th-sub { display: block; font-weight: normal; font-size: 9px; opacity: 0.65; margin-top: 2px; }
-  td { padding: 2px 6px; border: 1px solid #e0e0e0; }
+  td { padding: 2px 3px; border: 1px solid #e0e0e0; }
   tr:hover td { background: #fffde7 !important; }
-  .total-row td { background: #e2efda !important; font-weight: bold; }
+  .total-row td { font-weight: bold; border-top: 1px solid #000; border-bottom: 1px solid #000; box-shadow: inset 0 1px 0 #000; }
   .sep-row td { background: #f0f0f0; height: 5px; padding: 0; border: none; }
 
 
@@ -114,7 +116,6 @@ const DIM_STOCKS = new Set([
   "010950", // S-Oil
   "086280", // 현대글로비스
   "003230", // 삼양식품
-  "010060", // OCI홀딩스
   "008770", // 호텔신라
   "010130", // 고려아연
   "001800", // 오리온홀딩스
@@ -127,7 +128,10 @@ const DIM_STOCKS = new Set([
 let filterMode = 0; // 0=전체, 1=DIM만, 2=비DIM만
 
 // stripe 배경 제외 컬럼: ColorScale(F/R/S/AB) + MM Spread Alert + Ex1/Ex2 Spread
-const STRIPE_SKIP_CIDX = new Set([4, 10, 16, 17, 20, 21, 23, 24, 26]);
+const STRIPE_SKIP_CIDX = new Set([0, 1, 4, 10, 16, 17, 20, 21, 23, 24, 26]);
+
+// 굵은 세로선(오른쪽 테두리) 적용 컬럼
+const VLINE_CIDX = new Set([1, 3, 4, 6, 7, 10, 11, 12, 13, 15, 17, 18, 19, 21, 22, 24]);
 
 function setStripe(tr, isOdd) {
   tr.querySelectorAll("td").forEach((td, i) => {
@@ -219,10 +223,16 @@ function buildTable(d) {
   while (i < colOrder.length) {
     const c = colOrder[i];
     if (c.cidx === 5) {
-      theadHtml += `<th colspan="2">Amt Shr</th>`;
+      const vs = VLINE_CIDX.has(6) ? ' style="border-right:1px solid #000"' : "";
+      theadHtml += `<th colspan="2"${vs}>Amount<br>(Shares)</th>`;
       i += 2; // cidx 5, 6 함께 소비
     } else {
-      theadHtml += `<th>${c.hdr}</th>`;
+      const cls = c.cidx === 13 ? ' class="diff-hdr"' : "";
+      const vs  = VLINE_CIDX.has(c.cidx) ? ' style="border-right:1px solid #000"' : "";
+      const raw = c.sub || c.hdr;
+      // MTM PnL(25) / Theo PnL(26) 는 1줄, 나머지는 첫 공백에서 2줄
+      const label = (c.cidx === 25 || c.cidx === 26) ? raw : raw.replace(" ", "<br>");
+      theadHtml += `<th${cls}${vs}>${label}</th>`;
       i++;
     }
   }
@@ -241,12 +251,24 @@ function buildTable(d) {
       const row = sec.rows[ri];
       const lastPrice = parseFloat((row["2"]?.v || "0").replace(/,/g, "")) || 0;
       // const isDim = DIM_STOCKS.has(row["0"]?.v || "");
-      html += `<tr class="${meta.total ? "total-row" : ""}">`;
-      for (const { cidx } of colOrder) {
-        const cell = row[String(cidx)] || { v: "", color: "" };
-        html += makeTd(sec.id, ri, cidx, cell, lastPrice);
+      if (meta.total) {
+        // 합계: 앞 2칼럼(Stock+StockName) 병합, 라벨 가운데 정렬
+        const labelVal = [0, 1].map(c => row[String(c)]?.v || "").find(x => String(x).trim() !== "") || "";
+        let h = `<tr class="total-row"><td colspan="2" style="background:#e2efda;text-align:center;border-right:1px solid #000">${labelVal}</td>`;
+        for (let k = 2; k < colOrder.length; k++) {
+          const cidx = colOrder[k].cidx;
+          const cell = row[String(cidx)] || { v: "", color: "" };
+          h += makeTd(sec.id, ri, cidx, cell, lastPrice, true);
+        }
+        html += h + "</tr>";
+      } else {
+        html += `<tr>`;
+        for (const { cidx } of colOrder) {
+          const cell = row[String(cidx)] || { v: "", color: "" };
+          html += makeTd(sec.id, ri, cidx, cell, lastPrice, false);
+        }
+        html += "</tr>";
       }
-      html += "</tr>";
     }
     // 섹션 간 구분선 (마지막 섹션 제외)
     if (si < mmSections.length - 1) {
@@ -293,9 +315,39 @@ function applySpreadStyle(td, sp, lastPrice) {
   td.style.fontWeight = s.fw;
 }
 
-function makeTd(sid, ri, cidx, cell, lastPrice) {
+function makeTd(sid, ri, cidx, cell, lastPrice, isTotal) {
   const styles = [];
-  styles.push(`text-align:${numCidx.has(cidx) ? "right" : "left"}`);
+  const align = cidx === 10 ? "center" : (numCidx.has(cidx) ? "right" : "left");
+  styles.push(`text-align:${align}`);
+
+  // Stock / StockName 회색 배경 (Excel #D9D9D9)
+  if (cidx === 0 || cidx === 1) styles.push("background:#D9D9D9");
+
+  // 굵은 세로선 (지정 컬럼 오른쪽)
+  if (VLINE_CIDX.has(cidx)) styles.push("border-right:1px solid #000");
+
+  // Change(%) 색상: 양수 빨강, 음수 파랑 (Excel 서식 동일)
+  if (cidx === 3) {
+    const n = parseFloat(String(cell.v).replace("%", "")) || 0;
+    if (n > 0)      styles.push("color:#ff0000");
+    else if (n < 0) styles.push("color:#0000ff");
+  }
+
+  // △Shares 색상: 음수 빨강, 양수 검정 (cidx 12)
+  if (cidx === 12) {
+    const n = parseFloat(String(cell.v).replace(/,/g, "")) || 0;
+    styles.push(n < 0 ? "color:#ff0000" : "color:#000");
+  }
+
+  // Amount(Shares) 음수 빨강 + 두 칸 동일 너비(8자리 수용) (cidx 5, 6)
+  if (cidx === 5 || cidx === 6) {
+    const n = parseFloat(String(cell.v).replace(/,/g, "")) || 0;
+    if (n < 0) styles.push("color:#ff0000");
+    styles.push("width:56px;min-width:56px;max-width:56px");
+  }
+
+  // Theo Basis 너비 ~1.2배 (cidx 19, 22)
+  if (cidx === 19 || cidx === 22) styles.push("min-width:50px");
 
   // ColorScale 배경 (F/Q/R/AA열)
   if (CS_CIDX.has(cidx) && cell.bg) {
@@ -315,6 +367,11 @@ function makeTd(sid, ri, cidx, cell, lastPrice) {
     if (s.bg)    styles.push(`background:${s.bg}`);
     if (s.color) styles.push(`color:${s.color}`);
     if (s.fw)    styles.push(`font-weight:${s.fw}`);
+  }
+
+  // 합계 행: "합계" 셀만 녹색, 나머지는 회색 (마지막에 push하여 배경 override)
+  if (isTotal) {
+    styles.push(`background:${String(cell.v).trim() === "합계" ? "#e2efda" : "#fff"}`);
   }
 
   return `<td id="c-${sid}-${ri}-${cidx}" style="${styles.join(";")}">${cell.v}</td>`;
@@ -374,6 +431,30 @@ function applyChanges(cells, updated, header) {
     if (!td) continue;
 
     td.textContent = v;
+
+    // 합계 행: 값이 갱신돼도 회색 유지 ("합계" 셀은 녹색)
+    if (td.parentElement && td.parentElement.classList.contains("total-row")) {
+      td.style.background = String(v).trim() === "합계" ? "#e2efda" : "#fff";
+      continue;
+    }
+
+    // Change(%) 색상 실시간 적용 (양수 빨강, 음수 파랑)
+    if (cidx === 3) {
+      const n = parseFloat(String(v).replace("%", "")) || 0;
+      td.style.color = n > 0 ? "#ff0000" : (n < 0 ? "#0000ff" : "");
+    }
+
+    // △Shares 색상 실시간 적용 (음수 빨강, 양수 검정)
+    if (cidx === 12) {
+      const n = parseFloat(String(v).replace(/,/g, "")) || 0;
+      td.style.color = n < 0 ? "#ff0000" : "#000";
+    }
+
+    // Amount(Shares) 음수 빨강 실시간 (cidx 5, 6)
+    if (cidx === 5 || cidx === 6) {
+      const n = parseFloat(String(v).replace(/,/g, "")) || 0;
+      td.style.color = n < 0 ? "#ff0000" : "";
+    }
 
     // ColorScale 배경 실시간 갱신
     if (CS_CIDX.has(cidx)) {
