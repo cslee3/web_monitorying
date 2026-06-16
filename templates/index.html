@@ -204,6 +204,8 @@
 
     function loadPnlReport() {
       currentPage = "PNL_REPORT";
+      localStorage.setItem("lastPage", "PNL_REPORT");
+      localStorage.setItem("lastTitle", "PnL Report");
 
       const titleEl = document.getElementById("pageTitle");
       if (titleEl) titleEl.textContent = "PnL Report";
@@ -213,6 +215,10 @@
       event.target.classList.add("active");
 
       if (autoRefreshId) { clearInterval(autoRefreshId); autoRefreshId = null; }
+
+      // 날짜 picker 표시
+      const dl = document.getElementById("dateLabel");
+      if (dl) dl.style.display = "";
 
       // 서버에서 가장 최신 PnL 날짜 조회 후 로드
       fetch("/api/archive/pnl/latest")
@@ -301,6 +307,8 @@
 
     function loadPage(page, title) {
       currentPage = page;
+      localStorage.setItem("lastPage", page);
+      localStorage.setItem("lastTitle", title || "");
       const iframe = document.getElementById("mainFrame");
       iframe.removeAttribute("srcdoc");
       iframe.src = `${page}?_=${Date.now()}`;
@@ -338,7 +346,7 @@
       }
     }
 
-    // 페이지 로드시 localStorage 확인
+    // 페이지 로드시 localStorage 확인 → 마지막 탭 복원
     window.onload = () => {
       const dp = document.getElementById("datePicker");
       if (dp) {
@@ -346,14 +354,46 @@
         const year = today.getFullYear();
         const month = String(today.getMonth() + 1).padStart(2, '0');
         const day = String(today.getDate()).padStart(2, '0');
-        dp.value = `${year}-${month}-${day}`; // ✅ 로컬 날짜
+        dp.value = `${year}-${month}-${day}`;
         dp.setAttribute('lang', 'en');
       }
-      showMainApp();      
+      showMainApp();
+
+      // 마지막 탭 복원
+      const lastPage = localStorage.getItem("lastPage");
+      const lastTitle = localStorage.getItem("lastTitle");
+      if (lastPage) {
+        if (lastPage === "PNL_REPORT") {
+          // PnL Report는 sidebar 첫번째 링크 클릭으로 복원
+          const pnlLink = document.querySelector(".sidebar a[onclick='loadPnlReport()']");
+          if (pnlLink) pnlLink.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        } else {
+          // 해당 페이지의 sidebar 링크 찾아서 active 처리
+          const links = document.querySelectorAll(".sidebar a");
+          let matched = false;
+          links.forEach(link => {
+            const oc = link.getAttribute("onclick") || "";
+            if (oc.includes(`'${lastPage}'`)) {
+              link.classList.add("active");
+              matched = true;
+            }
+          });
+          currentPage = lastPage;
+          const iframe = document.getElementById("mainFrame");
+          iframe.removeAttribute("srcdoc");
+          iframe.src = `${lastPage}?_=${Date.now()}`;
+          const titleEl = document.getElementById("pageTitle");
+          if (titleEl && lastTitle) titleEl.textContent = lastTitle;
+          const dl = document.getElementById("dateLabel");
+          if (dl) dl.style.display = "";
+        }
+      }
     };
 
     function goHome() {
       currentPage = "";
+      localStorage.removeItem("lastPage");
+      localStorage.removeItem("lastTitle");
       const iframe = document.getElementById("mainFrame");
       iframe.src = "welcome.html"; 
 

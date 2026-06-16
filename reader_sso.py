@@ -28,8 +28,8 @@ COLS = [
     (1,  "StockName",  lambda v: str(v) if v else ""),
     (2,  "Delta",      lambda v: _num(v, 0)),
     (4,  "%Gamma",     lambda v: _num(v, 2)),
-    (6,  "Amt Shr1",     lambda v: _num(v, 0)),
-    (7,  "Amt Shr2",     lambda v: _num(v, 0)),
+    (6,  "Vol Cnt",      lambda v: _num(v, 0)),
+    (7,  "Vol Amt",      lambda v: _num(v, 0)),
     (8,  "Theo PnL",   lambda v: _num(v, 0)),
     (10, "MTM PnL",    lambda v: _num(v, 0)),
 ]
@@ -78,6 +78,7 @@ class SsoMonitor:
         self._full_lock     = threading.Lock()
         self._full_data     = None
         self._running        = False  # 기본값: 중지 (터미널에서 r 입력으로 시작)
+        self._read_ok        = False  # 마지막 Excel 읽기 성공 여부
         self._last_status_ts = 0
         self._changes_since  = 0
         self._wake           = threading.Event()
@@ -99,7 +100,7 @@ class SsoMonitor:
     def _print_status(self):
         now_str  = datetime.datetime.now().strftime("%H:%M:%S")
         run_str  = "SSO:실행중" if self._running else "SSO:중지"
-        xl_str   = "Excel:OK" if self._full_data else "Excel:대기"
+        xl_str   = "Excel:OK" if self._read_ok else "Excel:대기"
         with self._clients_lock:
             n_clients = len(self._clients)
         changes = self._changes_since
@@ -250,6 +251,7 @@ class SsoMonitor:
                 if ws is not None:
                     ws        = None   # COM 참조 해제
                     prev_data = None
+                    self._read_ok = False
                 self._wake.wait(timeout=0.5)
                 self._wake.clear()
                 continue
@@ -258,6 +260,7 @@ class SsoMonitor:
                 if ws is None:
                     ws = self._get_ws()
                 data    = self._read_full(ws)
+                self._read_ok = True
                 now_str = datetime.datetime.now().strftime("%H:%M:%S")
 
                 if prev_data is None:
@@ -308,10 +311,12 @@ class SsoMonitor:
                     self._wake.clear()
                     continue
                 log.error(f"com_error: {e}")
+                self._read_ok = False
                 prev_data = None
                 ws        = None
             except Exception as e:
                 log.error(f"error: {e}")
+                self._read_ok = False
                 prev_data = None
                 ws        = None
 
@@ -353,16 +358,20 @@ _DETAIL_COLS = [
     (22, "P.Trade PnL", "right"),
 ]
 
-def generate_html(out_path=None, open_browser=True):
+def generate_html(out_path=None, open_browser=True, _data=None):
     """
     Option_DashBoard 탭을 한 번 읽어 정적 HTML 스냅샷을 생성.
     요약 테이블 + 전 종목 상세 테이블 인라인 포함.
+    _data: 이미 읽어둔 데이터 dict. None이면 Excel COM에서 직접 읽음.
     """
     if out_path is None:
         out_path = os.path.join(BASE_DIR, "templates", "sso_snapshot.html")
 
-    ws   = monitor._get_ws()
-    data = monitor._read_full(ws)
+    if _data is not None:
+        data = _data
+    else:
+        ws   = monitor._get_ws()
+        data = monitor._read_full(ws)
     now  = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     # ── 요약 테이블 ──────────────────────────────────────────────────────

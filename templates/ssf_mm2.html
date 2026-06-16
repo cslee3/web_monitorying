@@ -162,6 +162,10 @@ function connectStream() {
       wasError = false;
       fetch("/api/dashboard").then(r => r.ok ? r.json() : null)
         .then(d => { if (d && !d.error) buildTables(d); }).catch(() => {});
+    } else {
+      fetch("/api/dashboard").then(r => r.ok ? r.json() : null)
+        .then(d => { if (d && !d.error) document.getElementById("hUpdated").textContent = d.updated; })
+        .catch(() => {});
     }
   };
 
@@ -170,7 +174,7 @@ function connectStream() {
     if (d.type === "connected") { setMonState(d.running); return; }
     if (d.type === "monitor_paused")  { setMonState(false); return; }
     if (d.type === "monitor_resumed") { setMonState(true);  return; }
-    applyChanges(d.cells, d.updated);
+    applyChanges(d.cells, d.updated, d.header);
   };
 
   es.onerror = () => {
@@ -179,8 +183,12 @@ function connectStream() {
   };
 }
 
-function applyChanges(cells, updated) {
+function applyChanges(cells, updated, header) {
   document.getElementById("hUpdated").textContent = updated;
+  if (header) {
+    document.getElementById("hU3").textContent = header.u3;
+    document.getElementById("hV3").textContent = header.v3;
+  }
 
   for (const { key, v, bg } of cells) {
     // raw 섹션 key: "idx1_2_3" (sid_ri_ci)

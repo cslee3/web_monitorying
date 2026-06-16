@@ -155,6 +155,8 @@ def export(book_name=BOOK_NAME, sheet_name=SHEET_NAME, cell_range=CELL_RANGE,
 
     html_rows = []
     for r in range(1, rows_count + 1):
+        if r in [4,5,6]:
+            continue
         html_cells = []
         for c in range(1, cols_count + 1):
             cell = rng.Cells(r, c)

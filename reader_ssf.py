@@ -48,7 +48,7 @@ MM_COLS = [
     (15, "Vol(Mil)",      lambda v: _num(v, 0)),
     (16, "Delta(Shr)",    lambda v: _num(v, 0)),
     (17, "Delta(Mil)",    lambda v: _num(v, 0)),
-    (18, "Theo Price",    lambda v: _num(v, 0)),
+    (18, "Basis Ratio",   _pct),
     (19, "Theo Basis",    lambda v: _num(v, 0)),
     (20, "Ex1 B-Sp",      lambda v: _num(v, 0)),
     (21, "Ex1 S-Sp",      lambda v: _num(v, 0)),
@@ -304,9 +304,9 @@ class DashboardMonitor:
         self._full_data    = None
         self.db_save_enabled = True
         self._db_conn        = None
-        self._dumped_date    = None   # 오늘 덤프 완료한 날짜
         self._last_status_ts = 0      # 마지막 상태 출력 시각
         self._changes_since  = 0      # 마지막 상태 출력 이후 변경 건수
+        threading.Thread(target=self._dump_scheduler, daemon=True).start()
         self._read_ok        = False  # 마지막 Excel 읽기 성공 여부
         self._running        = False  # 기본값: 중지 (터미널에서 r 입력으로 시작)
         self._wake           = threading.Event()  # resume() 시 sleep 즉시 해제
@@ -453,23 +453,71 @@ class DashboardMonitor:
                 self._db_err_ts = now
             self._db_conn = None
 
+    def _dump_scheduler(self):
+        """매일 DB_DUMP_TIME에 _dump_and_cleanup 실행."""
+        while True:
+            now   = datetime.datetime.now()
+            target = now.replace(hour=DB_DUMP_TIME[0], minute=DB_DUMP_TIME[1],
+                                 second=0, microsecond=0)
+            if now >= target:
+                target += datetime.timedelta(days=1)
+            wait_sec = (target - now).total_seconds()
+            time.sleep(wait_sec)
+            dump_date = datetime.datetime.now().date()
+            log.warning(f"dump 스케줄 실행 ({dump_date})")
+            self._dump_and_cleanup(dump_date)
+
+    def _new_db_conn(self):
+        """덤프 전용 독립 커넥션 (공유 _db_conn 사용 안 함)."""
+        import socket
+        import mysql.connector
+        from db_manager import DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.settimeout(2)
+            s.connect((DB_HOST, DB_PORT))
+            s.close()
+        except Exception:
+            raise ConnectionError(f"MySQL 미연결 ({DB_HOST}:{DB_PORT})")
+        return mysql.connector.connect(
+            host=DB_HOST, port=DB_PORT,
+            user=DB_USER, password=DB_PASSWORD,
+            database=DB_NAME, charset="utf8mb4",
+            connection_timeout=3,
+            ssl_disabled=True,
+        )
+
     def _dump_and_cleanup(self, dump_date):
         """당일 ssf_history 데이터를 SQL 파일로 덤프하고 DB에서 삭제."""
+        log.warning(f"dump 시작 ({dump_date})")
         day_start = datetime.datetime.combine(dump_date, datetime.time.min).timestamp()
         day_end   = datetime.datetime.combine(
             dump_date + datetime.timedelta(days=1), datetime.time.min
         ).timestamp()
 
-        fname = os.path.join(BASE_DIR, f"ssf_history_{dump_date.strftime('%Y%m%d')}.sql")
+        dump_dir = os.path.join(BASE_DIR, "ssf_history")
+        os.makedirs(dump_dir, exist_ok=True)
+        base  = f"ssf_history_{dump_date.strftime('%Y%m%d')}"
+        fname = os.path.join(dump_dir, f"{base}.sql")
+        if os.path.exists(fname):
+            n = 1
+            while os.path.exists(os.path.join(dump_dir, f"{base}_{n}.sql")):
+                n += 1
+            fname = os.path.join(dump_dir, f"{base}_{n}.sql")
+
+        conn = None
         try:
-            conn = self._get_db_conn()
+            log.warning("dump: DB 연결 중...")
+            conn = self._new_db_conn()
             cur  = conn.cursor()
+            log.warning("dump: SELECT 실행 중...")
             cur.execute(
                 "SELECT * FROM ssf_history WHERE ts >= %s AND ts < %s ORDER BY ts",
                 (day_start, day_end),
             )
             rows = cur.fetchall()
             cols = [d[0] for d in cur.description]
+            log.warning(f"dump: {len(rows)} rows 조회 완료")
 
             if rows:
                 def _sql_val(v):
@@ -478,6 +526,7 @@ class DashboardMonitor:
                     return str(v)
 
                 col_str = ", ".join(cols)
+                log.warning(f"dump: SQL 파일 작성 중 → {fname}")
                 with open(fname, "w", encoding="utf-8") as f:
                     f.write(f"-- ssf_history {dump_date}  ({len(rows)} rows)\n")
                     f.write(f"INSERT INTO ssf_history ({col_str}) VALUES\n")
@@ -487,6 +536,7 @@ class DashboardMonitor:
                     ]
                     f.write(",\n".join(lines) + ";\n")
 
+                log.warning("dump: DB DELETE 중...")
                 cur.execute(
                     "DELETE FROM ssf_history WHERE ts >= %s AND ts < %s",
                     (day_start, day_end),
@@ -494,12 +544,15 @@ class DashboardMonitor:
                 conn.commit()
                 log.warning(f"dumped {len(rows)} rows → {fname}, DB 정리 완료")
             else:
-                log.info(f"dump 대상 없음 ({dump_date})")
+                log.warning(f"dump 대상 없음 ({dump_date})")
 
             cur.close()
         except Exception as e:
             log.error(f"dump error: {e}")
-            self._db_conn = None
+        finally:
+            if conn is not None:
+                try: conn.close()
+                except Exception: pass
 
         # 스냅샷 HTML 아카이브 저장
         self._archive_html(dump_date)
@@ -517,10 +570,20 @@ class DashboardMonitor:
         archive_dir = os.path.join(BASE_DIR, "archive")
         os.makedirs(archive_dir, exist_ok=True)
         date_str = dump_date.strftime("%Y%m%d")
+
+        # 메모리에 캐시된 데이터 우선 사용 (COM 재호출·스레드 충돌 방지)
+        with self._full_lock:
+            ssf_data = self._full_data
+        with reader_sso.monitor._full_lock:
+            sso_data = reader_sso.monitor._full_data
+
         try:
-            generate_html(os.path.join(archive_dir, f"ssf_mm_{date_str}.html"), open_browser=False)
-            generate_html_idx(os.path.join(archive_dir, f"ssf_mm2_{date_str}.html"), open_browser=False)
-            reader_sso.generate_html(os.path.join(archive_dir, f"sso_mm_{date_str}.html"), open_browser=False)
+            generate_html(os.path.join(archive_dir, f"ssf_mm_{date_str}.html"),
+                          open_browser=False, _data=ssf_data)
+            generate_html_idx(os.path.join(archive_dir, f"ssf_mm2_{date_str}.html"),
+                              open_browser=False, _data=ssf_data)
+            reader_sso.generate_html(os.path.join(archive_dir, f"sso_mm_{date_str}.html"),
+                                     open_browser=False, _data=sso_data)
             log.warning(f"archive saved → ssf_mm_{date_str}.html, ssf_mm2_{date_str}.html, sso_mm_{date_str}.html")
         except Exception as e:
             log.error(f"archive error: {e}")
@@ -581,15 +644,15 @@ class DashboardMonitor:
             for q in dead:
                 self._clients.remove(q)
 
-    def _get_ws(self):
-        """실행 중인 Excel에서 BOOK_NAME 워크북을 이름으로 찾아 DashBoard 시트 반환.
+    def _get_xl_ws(self):
+        """실행 중인 Excel에서 BOOK_NAME 워크북을 이름으로 찾아 (xl, ws) 반환.
         GetObject(path) 대신 GetActiveObject 사용 — OneDrive 경로 불일치 문제 회피.
         """
         xl = win32com.client.GetActiveObject("Excel.Application")
         for i in range(1, xl.Workbooks.Count + 1):
             wb = xl.Workbooks.Item(i)
             if wb.Name == BOOK_NAME:
-                return wb.Sheets("DashBoard")
+                return xl, wb.Sheets("DashBoard")
         raise RuntimeError(f"'{BOOK_NAME}' 파일이 Excel에서 열려있지 않음")
 
     def _read_full(self, ws):
@@ -620,11 +683,13 @@ class DashboardMonitor:
         pythoncom.CoInitialize()
         prev_data = None
         ws        = None
+        xl        = None
 
         while True:
             if not self._running:
                 if ws is not None:
                     ws        = None   # COM 참조 해제
+                    xl        = None
                     prev_data = None
                     self._read_ok = False
                 self._wake.wait(timeout=0.5)
@@ -633,8 +698,28 @@ class DashboardMonitor:
 
             try:
                 if ws is None:
-                    ws = self._get_ws()
-                data    = self._read_full(ws)
+                    xl, ws = self._get_xl_ws()
+
+                # Excel 재계산 중이면 0.1초 후 재시도 (continue)
+                # CalculationState 자체가 COM 호출이라 hang 가능 → if문으로 1번만 체크
+                try:
+                    if xl.CalculationState == 2:
+                        _ts = datetime.datetime.now().strftime("%H:%M:%S")
+                        self._push(json.dumps({"cells": [], "updated": _ts}))
+                        with self._full_lock:
+                            if self._full_data:
+                                self._full_data["updated"] = _ts
+                        self._wake.wait(timeout=0.1)
+                        self._wake.clear()
+                        continue
+                except Exception:
+                    pass
+
+                _t0  = time.time()
+                data = self._read_full(ws)
+                _dt  = time.time() - _t0
+                if _dt > 0.5:
+                    log.warning(f"COM read slow: {_dt:.2f}s")
                 self._read_ok = True
                 now_str = datetime.datetime.now().strftime("%H:%M:%S")
 
@@ -642,10 +727,6 @@ class DashboardMonitor:
                     with self._full_lock:
                         self._full_data = data
                     prev_data = data
-                    # 시작 시점이 덤프 시각 이후면 오늘 덤프 건너뜀
-                    _now = datetime.datetime.now()
-                    if (_now.hour, _now.minute) >= DB_DUMP_TIME:
-                        self._dumped_date = _now.date()
                     log.warning("initial load done")
                     threading.Thread(target=self._refresh_db_ok, daemon=True).start()
                     self._wake.wait(timeout=1.0)
@@ -679,7 +760,7 @@ class DashboardMonitor:
                 data["updated"] = now_str
                 with self._full_lock:
                     self._full_data = data
-                self._push(json.dumps({"cells": changes, "updated": now_str}))
+                self._push(json.dumps({"cells": changes, "updated": now_str, "header": data["header"]}))
                 self._changes_since += len(changes)
                 if changes:
                     log.info(f"{now_str} — pushed {len(changes)} changes")
@@ -690,9 +771,7 @@ class DashboardMonitor:
                     self._last_status_ts = time.time()
 
                 if self.db_save_enabled:
-                    now   = datetime.datetime.now()
-                    today = now.date()
-                    hhmm  = (now.hour, now.minute)
+                    hhmm = (datetime.datetime.now().hour, datetime.datetime.now().minute)
                     if DB_SAVE_START <= hhmm <= DB_SAVE_END:
                         # DB 저장을 별도 스레드로 — run() 루프 블로킹 방지
                         _t = threading.Thread(
@@ -701,13 +780,6 @@ class DashboardMonitor:
                             daemon=True,
                         )
                         _t.start()
-                    if hhmm >= DB_DUMP_TIME and self._dumped_date != today:
-                        self._dumped_date = today   # 먼저 설정해 중복 실행 방지
-                        threading.Thread(
-                            target=self._dump_and_cleanup,
-                            args=(today,),
-                            daemon=True,
-                        ).start()
 
                 prev_data = data
 
@@ -721,11 +793,13 @@ class DashboardMonitor:
                 self._read_ok = False
                 prev_data = None
                 ws        = None
+                xl        = None
             except Exception as e:
                 log.error(f"error: {e}")
                 self._read_ok = False
                 prev_data = None
                 ws        = None
+                xl        = None
 
             self._wake.wait(timeout=1.0)
             self._wake.clear()
@@ -746,16 +820,21 @@ def _spread_style_py(sp, last_price):
     if sp + tick > 0:     return "color:#cc0000;font-weight:bold;"
     return ""
 
-def generate_html(out_path=None, open_browser=True):
-    """MM 섹션(main/sum1/sum2) 스냅샷 HTML 생성."""
+def generate_html(out_path=None, open_browser=True, _data=None):
+    """MM 섹션(main/sum1/sum2) 스냅샷 HTML 생성.
+    _data: 이미 읽어둔 데이터 dict. None이면 Excel COM에서 직접 읽음.
+    """
     import pythoncom, webbrowser
     pythoncom.CoInitialize()
 
     if out_path is None:
         out_path = os.path.join(BASE_DIR, "ssf_snapshot.html")
 
-    ws   = monitor._get_ws()
-    data = monitor._read_full(ws)
+    if _data is not None:
+        data = _data
+    else:
+        _, ws = monitor._get_xl_ws()
+        data  = monitor._read_full(ws)
 
     header      = data["header"]
     mm_sections = [s for s in data["sections"] if not s.get("raw")]
@@ -832,17 +911,22 @@ def generate_html(out_path=None, open_browser=True):
 
 _SUBHDR_VALS = {"△Amount", "Strike", "Theo PnL", "MTM PnL"}
 
-def generate_html_idx(out_path=None, open_browser=True):
-    """IDX2 섹션 스냅샷 HTML 생성."""
+def generate_html_idx(out_path=None, open_browser=True, _data=None):
+    """IDX2 섹션 스냅샷 HTML 생성.
+    _data: 이미 읽어둔 데이터 dict. None이면 Excel COM에서 직접 읽음.
+    """
     import webbrowser
     pythoncom.CoInitialize()
 
     if out_path is None:
         out_path = os.path.join(BASE_DIR, "ssf_idx_snapshot.html")
 
-    ws       = monitor._get_ws()
-    bulk     = ws.Range("B2:AL44").Value
-    sections = _read_idx2(bulk)
+    if _data is not None:
+        sections = [s for s in _data["sections"] if s.get("raw")]
+    else:
+        _, ws    = monitor._get_xl_ws()
+        bulk     = ws.Range("B2:AL44").Value
+        sections = _read_idx2(bulk)
     now      = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     body = ""

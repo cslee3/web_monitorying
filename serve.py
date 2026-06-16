@@ -27,9 +27,13 @@ TMPL_DIR = os.path.join(BASE_DIR, "templates")
 
 def _sse_response(monitor):
     """SSE 응답 생성 헬퍼. monitor에 클라이언트 큐를 등록하고 스트림 반환."""
+    import logger as _logger_mod
+    _slog = _logger_mod.get_logger("sse")
     q = monitor.add_client()
+    mon_name = type(monitor).__name__
 
     def generate():
+        _slog.info(f"{mon_name} SSE connected (total={len(monitor._clients)})")
         try:
             running = str(monitor.is_running()).lower()
             yield f"data: {{\"type\":\"connected\",\"running\":{running}}}\n\n"
@@ -39,8 +43,11 @@ def _sse_response(monitor):
                     yield f"data: {data}\n\n"
                 except Empty:
                     yield ": keepalive\n\n"
+        except Exception as e:
+            _slog.error(f"{mon_name} SSE generator error: {e}")
         finally:
             monitor.remove_client(q)
+            _slog.info(f"{mon_name} SSE disconnected (total={len(monitor._clients)})")
 
     return Response(
         generate(),
@@ -169,14 +176,43 @@ def static_files(filename):
 
 # ── 터미널 상태 표시 ──────────────────────────────────────────────────────
 
-_GREEN = "\x1b[32m"
-_RED   = "\x1b[31m"
-_RESET = "\x1b[0m"
+def _enable_ansi() -> bool:
+    """ANSI 이스케이프 코드 지원 여부 확인 및 활성화.
+    IPython 환경에서는 sys.stdout이 래퍼 객체이므로 sys.__stdout__ 기준으로 판단.
+    """
+    raw = sys.__stdout__
+    if raw is None or not raw.isatty():
+        return False
+    try:
+        import ctypes
+        kernel32 = ctypes.windll.kernel32
+        handle = kernel32.GetStdHandle(-11)
+        mode   = ctypes.c_ulong()
+        if kernel32.GetConsoleMode(handle, ctypes.byref(mode)):
+            kernel32.SetConsoleMode(handle, mode.value | 0x0004)
+    except Exception:
+        pass
+    return True
 
-# 전체 visible 폭 = 46자
-# "    " (4) + "#" (1) + 내용 (40) + "#" (1)
-_SEP     = "    " + "#" * 42   # 4 + 42 = 46
-_CMD_ROW = 12
+
+# 터미널 출력은 IPython 래퍼를 우회해 원본 콘솔로 직접 씀
+_COUT = sys.__stdout__ or sys.stdout
+
+_ANSI  = _enable_ansi()
+_GREEN = "\x1b[32m" if _ANSI else ""
+_RED   = "\x1b[31m" if _ANSI else ""
+_RESET = "\x1b[0m"  if _ANSI else ""
+
+# 전체 visible 폭 = 54자 (prefix 4 + content 50)
+_SEP     = "    " + "#" * 50
+_CMD_SEP = "    " + "#" * 50
+#           9           10    2   10    2   4    2   11       → 48
+_CMD1    = "    #  DB  :  b=저장모드  p=핑  a=수동저장  f=덤프   #"
+#           9           10    2   10    17                    → 48
+_CMD2    = "    #  LOG :  l=로그모드  x=로그저장                 #"
+#           9           12    2    8    2    6    2    6   1  → 48
+_CMD3    = "    #  ETC :  t=모니터모드  d=스냅샷  c=화면  q=종료 #"
+_CMD_ROW = 17  # CMD> 가 출력되는 행 번호 (1-based)
 
 _cmd_buf      = b""
 _kbd_disabled = False
@@ -215,7 +251,7 @@ def _collect():
         'ssf_run': ssf.is_running(),
         'ssf_xl':  getattr(ssf, '_read_ok', False),
         'sso_run': sso.is_running(),
-        'sso_xl':  sso._full_data is not None,
+        'sso_xl':  getattr(sso, '_read_ok', False),
         'db_save': ssf.db_save_enabled,
         'db_conn': _db_connected(ssf),
         'ssf_cli': ssf_cli,
@@ -231,24 +267,19 @@ def _build_rows(st, t_str):
     # ─ status 열 visible: 8 chars (LIVE/DEAD/ON/OFF)
     # ─ info 열 visible: "#  " + 10chars + "  #" = 16
     # 합계: 22 + 8 + 16 = 46 ✓
-    xl_ssf  = "Excel: OK " if st['ssf_xl'] else "Excel:WAIT"
-    xl_sso  = "Excel: OK " if st['sso_xl'] else "Excel:WAIT"
-    db_info = "Connected " if st['db_conn'] else "No Conn   "
+    xl_ssf  = "Excel: OK         " if st['ssf_xl'] else "Excel:WAIT        "
+    xl_sso  = "Excel: OK         " if st['sso_xl'] else "Excel:WAIT        "
+    db_info = "Connected         " if st['db_conn'] else "No Conn           "
     mode = st['log_mode']   # "VERBOSE" / "QUIET" / "OFF"
-    log_info = f"{mode:<10}"
-    # 전체 visible 폭 = 46:
-    #   label열  "    #" (5) + "  " + 11chars + "   #" (4)       = 22
-    #   status열 8chars (LIVE/DEAD/ON/OFF/LOG)                    =  8
-    #   info열   "#  " (3) + 10chars + "  #" (3)                 = 16
-    #                                                        합계 = 46
+    log_info = f"{mode:<18}"
+    # 전체 visible 폭 = 54:
+    #   label열  22chars + status열 8chars + info열 24chars = 54
     return {
-        'title': f"    #  WEB MONITOR  |  {t_str}              #",
-        #          5 + 18 + 8 + 14 + 1 = 46
+        'title': f"    #  WEB MONITOR  |  {t_str}                      #",
         'ssf':   "    #  SSF Monitor   #" + _live(st['ssf_run'])  + f"#  {xl_ssf}  #",
         'sso':   "    #  SSO Monitor   #" + _live(st['sso_run'])  + f"#  {xl_sso}  #",
         'db':    "    #  DB  Save      #" + _onoff(st['db_save']) + f"#  {db_info}  #",
-        'cli':   f"    #  SSE Clients   #  SSF:{st['ssf_cli']:2d}  SSO:{st['sso_cli']:2d}       #",
-        #          22 + 2+4+2+2+4+2+7+1 = 22+24 = 46
+        'cli':   f"    #  SSE Clients   #  SSF:{st['ssf_cli']:2d}  SSO:{st['sso_cli']:2d}               #",
         'log':   "    #  Log File      #" + _logmode(mode) + f"#  {log_info}  #",
     }
 
@@ -262,46 +293,72 @@ def _print_status():
     out = []
     W   = out.append
 
-    if _prev_status is None:
+    if not _ANSI:
+        # ANSI 미지원 환경: cls로 화면 클리어 후 전체 재출력
+        os.system('cls')
+        W("\n\n")
+        W(_SEP           + "\n")
+        W(row['title']   + "\n")
+        W(_SEP           + "\n")
+        W(row['ssf']     + "\n")
+        W(row['sso']     + "\n")
+        W(row['db']      + "\n")
+        W(row['cli']     + "\n")
+        W(row['log']     + "\n")
+        W(_CMD_SEP       + "\n")
+        W(_CMD1          + "\n")
+        W(_CMD2          + "\n")
+        W(_CMD3          + "\n")
+        W(_CMD_SEP       + "\n")
+        W("\n")
+        W(f"    CMD> {_cmd_buf.decode('ascii', 'ignore')}\n")
+    elif _prev_status is None:
         W("\033[2J\033[H")
-        W(_SEP           + "\n")   # line 1
-        W(row['title']   + "\n")   # line 2
-        W(_SEP           + "\n")   # line 3
-        W(row['ssf']     + "\n")   # line 4
-        W(row['sso']     + "\n")   # line 5
-        W(row['db']      + "\n")   # line 6
-        W(row['cli']     + "\n")   # line 7
-        W(row['log']     + "\n")   # line 8
-        W(_SEP           + "\n")   # line 9
-        W("\n")                    # line 10
-        W("    명령: t=모니터  b=DB저장  p=DB핑  d=스냅샷  a=수동저장  l=로그  x=로그아카이브  c=화면  q=종료\n")  # line 11
-        W(f"    CMD> {_cmd_buf.decode('ascii', 'ignore')}\n")   # line 12
+        W("\n")                    # line  1
+        W("\n")                    # line  2
+        W(_SEP           + "\n")   # line  3
+        W(row['title']   + "\n")   # line  4
+        W(_SEP           + "\n")   # line  5
+        W(row['ssf']     + "\n")   # line  6
+        W(row['sso']     + "\n")   # line  7
+        W(row['db']      + "\n")   # line  8
+        W(row['cli']     + "\n")   # line  9
+        W(row['log']     + "\n")   # line 10
+        W(_CMD_SEP       + "\n")   # line 11
+        W(_CMD1          + "\n")   # line 12
+        W(_CMD2          + "\n")   # line 13
+        W(_CMD3          + "\n")   # line 14
+        W(_CMD_SEP       + "\n")   # line 15
+        W("\n")                    # line 16
+        W(f"    CMD> {_cmd_buf.decode('ascii', 'ignore')}\n")   # line 17
     else:
         prev = _prev_status
-        W(f"\033[2;1H{row['title']}")
+        W(f"\033[4;1H{row['title']}")
         if st['ssf_run'] != prev['ssf_run'] or st['ssf_xl'] != prev['ssf_xl']:
-            W(f"\033[4;1H{row['ssf']}")
+            W(f"\033[6;1H{row['ssf']}")
         if st['sso_run'] != prev['sso_run'] or st['sso_xl'] != prev['sso_xl']:
-            W(f"\033[5;1H{row['sso']}")
+            W(f"\033[7;1H{row['sso']}")
         if st['db_save'] != prev['db_save'] or st['db_conn'] != prev['db_conn']:
-            W(f"\033[6;1H{row['db']}")
+            W(f"\033[8;1H{row['db']}")
         if st['ssf_cli'] != prev['ssf_cli'] or st['sso_cli'] != prev['sso_cli']:
-            W(f"\033[7;1H{row['cli']}")
+            W(f"\033[9;1H{row['cli']}")
         if st['log_mode'] != prev.get('log_mode'):
-            W(f"\033[8;1H{row['log']}")
+            W(f"\033[10;1H{row['log']}")
 
     try:
-        sys.stdout.write("".join(out))
-        sys.stdout.flush()
+        _COUT.write("".join(out))
+        _COUT.flush()
     except Exception:
         pass
     _prev_status = {**st}
 
 
 def _render_cmdline():
+    if not _ANSI:
+        return
     buf = _cmd_buf.decode('ascii', 'ignore')
-    sys.stdout.write(f"\033[{_CMD_ROW};1H    CMD> {buf}\033[K")
-    sys.stdout.flush()
+    _COUT.write(f"\033[{_CMD_ROW};1H    CMD> {buf}\033[K")
+    _COUT.flush()
 
 
 def _read_commands():
@@ -414,6 +471,20 @@ def _clear_screen():
     _prev_status = None
 
 
+def _manual_dump():
+    import datetime
+    today = datetime.date.today()
+    m = reader_ssf.monitor
+    def _do():
+        try:
+            _log.warning(f"수동 DB 덤프 시작 ({today.strftime('%Y%m%d')})")
+            m._dump_and_cleanup(today)
+            _log.warning("수동 DB 덤프 완료 (SQL 저장 + DB 클리어)")
+        except Exception as e:
+            _log.error(f"수동 DB 덤프 실패: {e}")
+    threading.Thread(target=_do, daemon=True).start()
+
+
 def _ping_db():
     import threading
     threading.Thread(target=reader_ssf.monitor._refresh_db_ok, daemon=True).start()
@@ -426,6 +497,7 @@ def _dispatch(cmd):
     elif cmd == 'p': _ping_db()
     elif cmd == 'd': _manual_snapshot()
     elif cmd == 'a': _manual_db_save()
+    elif cmd == 'f': _manual_dump()
     elif cmd == 'l': _toggle_log()
     elif cmd == 'x': _archive_log_now()
     elif cmd == 'c':
@@ -433,17 +505,19 @@ def _dispatch(cmd):
         if _log: _log.info("화면 새로고침")
     elif cmd == 'q':
         if _log: _log.warning("서버 종료 (q)")
-        sys.stdout.write("\033[?25h")   # 커서 복원
-        sys.stdout.flush()
+        if _ANSI:
+            _COUT.write("\033[?25h")   # 커서 복원
+            _COUT.flush()
         os._exit(0)
 
 
 def _status_loop():
     import time
+    _interval = 1.0 if not _ANSI else 0.25
     while True:
         try:
             _print_status()
-            time.sleep(0.25)
+            time.sleep(_interval)
             for cmd in _read_commands():
                 try:
                     _dispatch(cmd)
@@ -471,8 +545,9 @@ def start():
     logger.setup()
     _log = logger.get_logger(__name__)
 
-    sys.stdout.write("\033[?25l")   # 커서 숨김
-    sys.stdout.flush()
+    if _ANSI:
+        _COUT.write("\033[?25l")   # 커서 숨김
+        _COUT.flush()
 
     threading.Thread(target=reader_ssf.monitor.run, daemon=True).start()
     threading.Thread(target=reader_sso.monitor.run, daemon=True).start()
