@@ -26,7 +26,7 @@ log = get_logger(__name__)
 COLS = [
     (0,  "StockCode",  lambda v: str(v) if v else ""),
     (1,  "StockName",  lambda v: str(v) if v else ""),
-    (2,  "Delta",      lambda v: _num(v, 0)),
+    (2,  "Delta",      lambda v: _num(v, 2)),
     (4,  "%Gamma",     lambda v: _num(v, 2)),
     (6,  "Vol Cnt",      lambda v: _num(v, 0)),
     (7,  "Vol Amt",      lambda v: _num(v, 0)),

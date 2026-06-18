@@ -88,7 +88,7 @@
 <div id="status">데이터 로딩 중...</div>
 
 <div class="table-wrap" id="tableWrap" style="display:none">
-  <table>
+  <table id="mmTable">
     <thead id="thead"></thead>
     <tbody id="tbody"></tbody>
   </table>
@@ -123,6 +123,11 @@ const DIM_STOCKS = new Set([
   "108490", // 로보티즈
   "033780", // KT&G
   "011200", // HMM
+  "326030", // SK바이오팜
+  "010060", // OCI홀딩스
+  "298020", // 효성티앤씨
+  "222080", // 씨아이에스
+  "000810", // 삼성화재
 ]);
 
 let filterMode = 0; // 0=전체, 1=DIM만, 2=비DIM만
@@ -282,7 +287,35 @@ function buildTable(d) {
   document.getElementById("infoBar").style.display   = "flex";
   document.getElementById("tableWrap").style.display = "block";
 
+  lockColWidths();
+
   if (tw) { tw.scrollLeft = savedLeft; tw.scrollTop = savedTop; }
+}
+
+// 컬럼 폭을 빌드 시점(전체 행) 기준으로 고정 → DIM 필터로 행 숨겨도 폭 불변. Diff(cidx 13)는 1.2배.
+function lockColWidths() {
+  const table = document.getElementById("mmTable");
+  if (!table) return;
+  table.style.tableLayout = "auto";
+  const oldCg = table.querySelector("colgroup");
+  if (oldCg) oldCg.remove();
+  let row = null;
+  for (const tr of document.getElementById("tbody").querySelectorAll("tr")) {
+    if (!tr.classList.contains("sep-row") && !tr.classList.contains("total-row")) { row = tr; break; }
+  }
+  if (!row) return;
+  const tds = row.children;
+  if (tds.length !== colOrder.length) return;
+  const cg = document.createElement("colgroup");
+  for (let k = 0; k < tds.length; k++) {
+    let w = tds[k].getBoundingClientRect().width;
+    if (colOrder[k] && colOrder[k].cidx === 13) w *= 1.2;
+    const col = document.createElement("col");
+    col.style.width = Math.round(w) + "px";
+    cg.appendChild(col);
+  }
+  table.insertBefore(cg, table.firstChild);
+  table.style.tableLayout = "fixed";
 }
 
 // F=4, R=16, S=17, AB=26 — ColorScale 그라디언트 적용 컬럼

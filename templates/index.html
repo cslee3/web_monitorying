@@ -222,42 +222,13 @@
 
       if (autoRefreshId) { clearInterval(autoRefreshId); autoRefreshId = null; }
 
-      // 날짜 picker 표시
+      // PnL Report는 날짜 없이 고정 파일 1개를 로드 (매일 아침 export_html.py가 덮어씀)
       const dl = document.getElementById("dateLabel");
-      if (dl) dl.style.display = "";
+      if (dl) dl.style.display = "none";
 
-      // 서버에서 가장 최신 PnL 날짜 조회 후 로드
-      fetch("/api/archive/pnl/latest")
-        .then(r => r.json())
-        .then(data => {
-          const dp = document.getElementById("datePicker");
-          if (data.date) {
-            // YYYYMMDD → YYYY-MM-DD
-            const d = data.date;
-            const isoDate = `${d.slice(0,4)}-${d.slice(4,6)}-${d.slice(6,8)}`;
-            if (dp) dp.value = isoDate;
-            _loadPnlUrl(d, isoDate);
-          } else {
-            // 파일 없으면 오늘 날짜로 시도
-            const _n = new Date();
-            const dateStr = String(_n.getFullYear()) +
-                            String(_n.getMonth()+1).padStart(2,"0") +
-                            String(_n.getDate()).padStart(2,"0");
-            const isoDate = `${_n.getFullYear()}-${String(_n.getMonth()+1).padStart(2,"0")}-${String(_n.getDate()).padStart(2,"0")}`;
-            if (dp) dp.value = isoDate;
-            _loadPnlUrl(dateStr, isoDate);
-          }
-        })
-        .catch(() => {
-          // 서버 응답 없으면 오늘 날짜 fallback
-          const _n = new Date();
-          const dateStr = String(_n.getFullYear()) +
-                          String(_n.getMonth()+1).padStart(2,"0") +
-                          String(_n.getDate()).padStart(2,"0");
-          const dp = document.getElementById("datePicker");
-          if (dp) dp.value = `${_n.getFullYear()}-${String(_n.getMonth()+1).padStart(2,"0")}-${String(_n.getDate()).padStart(2,"0")}`;
-          _loadPnlUrl(dateStr, dateStr);
-        });
+      const f = document.getElementById("mainFrame");
+      f.removeAttribute("srcdoc");
+      f.src = `pnl_report.html?_=${Date.now()}`;
     }
 
     function loadArchivePage() {

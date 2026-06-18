@@ -1045,14 +1045,15 @@ def generate_html_idx(out_path=None, open_browser=True, _data=None):
                 if is_idx7 and ci == 0:
                     style = "background:#DEE7ED;color:#000;font-weight:bold"
                 elif is_idx5 and v in _SUBHDR_VALS:
-                    style = "background:#DEE7ED;color:#000;font-weight:bold;box-shadow:inset 0 0 0 1px #000"
+                    _bs = "inset 0 2px 0 #000" if v in ("Theo PnL", "MTM PnL") else "inset 0 2px 0 #000,inset 0 -2px 0 #000"
+                    style = "background:#DEE7ED;color:#000;font-weight:bold;text-align:center;box-shadow:" + _bs
                 elif ci == 0 and v == "Alert":
                     style = "background:#ffff00;color:#cc0000;font-weight:bold;text-align:center"
                 elif bg:
                     style = f"background:{bg}"
                 elif ci in gray_ci and not (is_cost_row and ci < 2):
                     style = "background:#D9D9D9"
-                if ci in vline_ci and not (is_cost_row and str(v).strip() == "Cost") and not (is_idx5 and v in _SUBHDR_VALS):
+                if ci in vline_ci and not (is_cost_row and str(v).strip() == "Cost"):
                     style += (";" if style else "") + "border-right:1px solid #000"
                 if box_shadow:
                     style += (";" if style else "") + box_shadow
