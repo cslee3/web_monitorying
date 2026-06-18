@@ -18,7 +18,9 @@ copy /Y "logger.py"         "%DEST%" > nul
 copy /Y "common.py"         "%DEST%" > nul
 copy /Y "db_manager.py"     "%DEST%" > nul
 copy /Y "db_initializer.py" "%DEST%" > nul
+copy /Y "export_html.py"    "%DEST%" > nul
 copy /Y "view_log.bat"      "%DEST%" > nul
+copy /Y "chart.umd.js"      "%DEST%" > nul
 
 xcopy /Y /I /Q "templates" "%DEST%\templates"
 xcopy /Y /I /Q "static"    "%DEST%\static"
