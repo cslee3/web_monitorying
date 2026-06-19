@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-export_html.py — MM파트_재무손익.xlsb 'Report' 탭 → 웹용 PnL Report HTML 생성 (일회성)
+export_html.py — MM파트_재무손익.xlsb 'Report' 탭 → 웹용 PnL Trend HTML 생성 (일회성)
 
 매일 아침 한 번 실행. 'Report' 시트의 월별 손익/장부금액(MM PnL Trend)을 읽어
-(기준일은 'PnL' 시트 C2) templates/pnl_report.html 하나를 덮어쓴다.
+(기준일은 'PnL' 시트 C2) templates/pnl_trend.html 하나를 덮어쓴다.
   - 날짜 파일명 없음 / 날짜 picker 없음 (고정 파일 1개)
   - 라이브 아님: serve.py(모니터링 Excel 점유)와 별개의 일회성 스크립트
 
@@ -30,7 +30,7 @@ UNIT_LABEL  = "단위 백만원"
 SHOW_BASEDATE = True                    # 헤더에 기준일(C2) 표기 여부
 
 BASE_DIR    = os.path.dirname(os.path.abspath(__file__))
-OUTPUT      = os.path.join(BASE_DIR, "templates", "pnl_report.html")
+OUTPUT      = os.path.join(BASE_DIR, "templates", "pnl_trend.html")
 CHART_JS    = "chart.umd.js"            # BASE_DIR 에 위치, /chart.umd.js 로 서빙됨
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -185,7 +185,7 @@ _HTML_HEAD = """<!DOCTYPE html>
 <html lang="ko">
 <head>
 <meta charset="UTF-8" />
-<title>PnL Report</title>
+<title>PnL Trend</title>
 <style>
   :root{ --pos:#A32D2D; --neg:#185FA5; --ink:#1f2328; --muted:#5F5E5A; --hint:#8a8a85;
          --line:#e3e3df; --line2:#cfcfca; --bg:#fff; --emph:#f4f6f9;
@@ -233,11 +233,7 @@ _HTML_BODY = """<div class="lgrow">
     (D.basedate ? '기준일 '+D.basedate+' · ' : '') + (D.unit||'');
 
   var lg = document.getElementById('legend'); var html='';
-  html += '<span style="color:#8a8a85">손익(좌축)</span>';
-  D.pnlRows.forEach(function(n){
-    if(n==='합계'){ html += '<span><span class="ln" style="background:'+C['합계']+'"></span>합계</span>'; }
-    else { html += '<span><span class="sw" style="background:'+(C[n]||'#888')+'"></span>'+n+'</span>'; }
-  });
+  html += '<span><span class="ln" style="background:'+C['합계']+'"></span>손익합계 <span style="color:#8a8a85">(좌축)</span></span>';
   html += '<span style="color:#d4d4d0">│</span>';
   html += '<span><span class="sw" style="background:'+C[D.notional]+'"></span>'+D.notional+' <span style="color:#8a8a85">(우축)</span></span>';
   lg.innerHTML = html;
@@ -253,7 +249,7 @@ _HTML_BODY = """<div class="lgrow">
       var c = pnl ? col(v) : (v==null?'#8a8a85':MUTED);
       return '<td style="color:'+c+'">'+fmt(v)+'</td>';
     }).join('');
-    return '<tr class="'+cls+'"><td class="lab">'+n+'</td>'+cells+'<td></td></tr>';
+    return '<tr class="'+cls+'"><td class="lab">'+(n==='합계'?'손익합계':n)+'</td>'+cells+'<td></td></tr>';
   }).join('');
   document.getElementById('tbl').innerHTML =
     '<table style="table-layout:fixed;width:100%">'+colg+'<thead><tr><th class="lab"></th>'+thM+'<th></th></tr></thead><tbody>'+body+'</tbody></table>';
@@ -273,16 +269,17 @@ _HTML_BODY = """<div class="lgrow">
       return { x: el.x + w/2, y: ymid };
     };
   }
-  function bar(n,axis){ return {type:'bar',label:n,data:D.series[n],backgroundColor:C[n]||'#888',
-                               yAxisID:axis,borderRadius:2,categoryPercentage:0.8,barPercentage:0.9}; }
+  function hexA(hex,a){ var h=(hex||'#888888').replace('#',''); if(h.length===3){h=h[0]+h[0]+h[1]+h[1]+h[2]+h[2];}
+    return 'rgba('+parseInt(h.substr(0,2),16)+','+parseInt(h.substr(2,2),16)+','+parseInt(h.substr(4,2),16)+','+a+')'; }
+  function bar(n,axis){ return {type:'bar',label:n,data:D.series[n],backgroundColor:hexA(C[n],0.65),
+                               yAxisID:axis,borderRadius:2,categoryPercentage:0.8,barPercentage:0.9,maxBarThickness:40}; }
   var ds = [];
-  D.pnlRows.forEach(function(n){ if(n!=='합계') ds.push(bar(n,'y')); });
   ds.push(bar(D.notional,'y1'));
-  ds.push({type:'line',label:'합계',data:D.series['합계'],yAxisID:'y',
-           borderColor:C['합계'],backgroundColor:C['합계'],borderWidth:2.5,pointRadius:2.5,tension:0.3});
+  ds.push({type:'line',label:'손익합계',data:D.series['합계'],yAxisID:'y',
+           borderColor:C['합계'],backgroundColor:C['합계'],borderWidth:3.75,pointRadius:2.5,tension:0.3});
   // 두 축의 0(영점) 위치를 일치시킴: min/max 비율을 동일하게 맞춤
   function _flat(keys){ var a=[]; keys.forEach(function(k){ (D.series[k]||[]).forEach(function(v){ if(v!=null)a.push(v); }); }); return a; }
-  var _L=_flat(D.pnlRows), _R=(D.series[D.notional]||[]).filter(function(v){ return v!=null; });
+  var _L=_flat(['합계']), _R=(D.series[D.notional]||[]).filter(function(v){ return v!=null; });
   var Lmax=Math.max.apply(null,[0].concat(_L))*1.08, Lmin=Math.min.apply(null,[0].concat(_L))*1.08;
   var Rmax=Math.max.apply(null,[0].concat(_R))*1.08, Rmin=Math.min.apply(null,[0].concat(_R))*1.08;
   var _lo=Lmax?Lmin/Lmax:0, _ro=Rmax?Rmin/Rmax:0;
@@ -302,12 +299,13 @@ _HTML_BODY = """<div class="lgrow">
             grid:{ drawOnChartArea:false }, ticks:{ color:MUTED, font:{size:12}, callback:function(v){ return Math.round(v).toLocaleString(); } } }
       } }
   });
+  var NUDGE = 14;  // 표 월 위치 미세조정(px, 양수=오른쪽으로)
   function _syncMonths(){
     var ca=_chart.chartArea, cg=document.querySelector('#tbl colgroup'), tbl=document.querySelector('#tbl table');
     if(!ca || !cg || !cg.children.length || !tbl) return;
     var tw=tbl.getBoundingClientRect().width;
-    cg.children[0].style.width = Math.round(ca.left)+'px';
-    cg.children[cg.children.length-1].style.width = Math.max(0, Math.round(tw-ca.right))+'px';
+    cg.children[0].style.width = Math.round(ca.left+NUDGE)+'px';
+    cg.children[cg.children.length-1].style.width = Math.max(0, Math.round(tw-ca.right-NUDGE))+'px';
   }
   requestAnimationFrame(function(){ _syncMonths(); requestAnimationFrame(_syncMonths); });
   window.addEventListener('resize', function(){ requestAnimationFrame(_syncMonths); });

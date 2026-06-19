@@ -202,7 +202,7 @@ class SsoMonitor:
 
     # ── 전체 데이터 읽기 ──────────────────────────────────────────────────
 
-    def _read_full(self, ws):
+    def _read_full(self, ws, with_detail=True):
         all_vals = ws.Range("B3:M9").Value
 
         # ColorScale 컬럼별 min/max 사전 계산
@@ -235,7 +235,7 @@ class SsoMonitor:
             "num_cidx": list(NUM_CIDX),
             "rows":     rows,
             "updated":  datetime.datetime.now().strftime("%H:%M:%S"),
-            "detail":   self._parse_detail(ws),
+            "detail":   self._parse_detail(ws) if with_detail else None,
         }
         return result
 
@@ -245,6 +245,8 @@ class SsoMonitor:
         pythoncom.CoInitialize()
         prev_data = None
         ws        = None
+        _last_detail_ts = 0.0   # 상세범위(무거움)는 ~1초마다만 읽음
+        _cached_detail  = {}
 
         while True:
             if not self._running:
@@ -259,7 +261,14 @@ class SsoMonitor:
             try:
                 if ws is None:
                     ws = self._get_ws()
-                data    = self._read_full(ws)
+                _now = time.time()
+                _read_detail = (_now - _last_detail_ts) >= 1.0
+                data    = self._read_full(ws, with_detail=_read_detail)
+                if _read_detail:
+                    _last_detail_ts = _now
+                    _cached_detail  = data["detail"]
+                else:
+                    data["detail"] = _cached_detail
                 self._read_ok = True
                 now_str = datetime.datetime.now().strftime("%H:%M:%S")
 
@@ -320,7 +329,7 @@ class SsoMonitor:
                 prev_data = None
                 ws        = None
 
-            self._wake.wait(timeout=1.0)
+            self._wake.wait(timeout=0.05)
             self._wake.clear()
 
 

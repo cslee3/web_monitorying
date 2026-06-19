@@ -685,6 +685,7 @@ class DashboardMonitor:
         prev_data = None
         ws        = None
         xl        = None
+        _last_db_save = 0.0   # DB 저장은 루프속도와 무관하게 ~1초 간격 유지
 
         while True:
             if not self._running:
@@ -700,21 +701,6 @@ class DashboardMonitor:
             try:
                 if ws is None:
                     xl, ws = self._get_xl_ws()
-
-                # Excel 재계산 중이면 0.1초 후 재시도 (continue)
-                # CalculationState 자체가 COM 호출이라 hang 가능 → if문으로 1번만 체크
-                try:
-                    if xl.CalculationState == 2:
-                        _ts = datetime.datetime.now().strftime("%H:%M:%S")
-                        self._push(json.dumps({"cells": [], "updated": _ts}))
-                        with self._full_lock:
-                            if self._full_data:
-                                self._full_data["updated"] = _ts
-                        self._wake.wait(timeout=0.1)
-                        self._wake.clear()
-                        continue
-                except Exception:
-                    pass
 
                 _t0  = time.time()
                 data = self._read_full(ws)
@@ -771,9 +757,10 @@ class DashboardMonitor:
                     self._print_status()
                     self._last_status_ts = time.time()
 
-                if self.db_save_enabled:
+                if self.db_save_enabled and (time.time() - _last_db_save) >= 1.0:
                     hhmm = (datetime.datetime.now().hour, datetime.datetime.now().minute)
                     if DB_SAVE_START <= hhmm <= DB_SAVE_END:
+                        _last_db_save = time.time()
                         # DB 저장을 별도 스레드로 — run() 루프 블로킹 방지
                         _t = threading.Thread(
                             target=self._save_to_db,
@@ -802,7 +789,7 @@ class DashboardMonitor:
                 ws        = None
                 xl        = None
 
-            self._wake.wait(timeout=1.0)
+            self._wake.wait(timeout=0.05)
             self._wake.clear()
 
 

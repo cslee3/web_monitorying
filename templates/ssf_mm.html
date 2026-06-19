@@ -111,6 +111,8 @@ function setMonState(running) {
 let colOrder = [];
 let es = null;
 let wasError = false;
+let lastMsgTs = Date.now();   // 마지막 SSE 메시지 수신 시각
+let sseWatchdogId = null;     // 무신호 감지 재연결 타이머
 
 const DIM_STOCKS = new Set([
   "010950", // S-Oil
@@ -412,9 +414,11 @@ function makeTd(sid, ri, cidx, cell, lastPrice, isTotal) {
 
 function connectStream() {
   if (es) es.close();
+  lastMsgTs = Date.now();
   es = new EventSource("/api/stream");
 
   es.onopen = () => {
+    lastMsgTs = Date.now();
     document.getElementById("liveDot").className = "dot";
     if (wasError) {
       wasError = false;
@@ -429,6 +433,7 @@ function connectStream() {
   };
 
   es.onmessage = (e) => {
+    lastMsgTs = Date.now();
     const d = JSON.parse(e.data);
     if (d.type === "connected") { setMonState(d.running); return; }
     if (d.type === "monitor_paused")  { setMonState(false); return; }
@@ -440,6 +445,17 @@ function connectStream() {
     document.getElementById("liveDot").className = "dot error";
     wasError = true;
   };
+
+  // 무신호 감지 → 자동 재연결 (서버는 ~1초마다 push하므로 12초 무신호면 연결 죽은 것)
+  if (!sseWatchdogId) {
+    sseWatchdogId = setInterval(() => {
+      if (Date.now() - lastMsgTs > 12000) {
+        document.getElementById("liveDot").className = "dot error";
+        wasError = true;
+        connectStream();
+      }
+    }, 4000);
+  }
 }
 
 function applyChanges(cells, updated, header) {

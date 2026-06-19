@@ -204,11 +204,15 @@ function buildButtons(d) {
 }
 
 /* ── SSE ──────────────────────────────────────────────────────────── */
+let lastMsgTs = Date.now();
+let sseWatchdogId = null;
 function connectStream() {
   if (es) es.close();
+  lastMsgTs = Date.now();
   es = new EventSource("/api/sso/stream");
 
   es.onopen = () => {
+    lastMsgTs = Date.now();
     document.getElementById("liveDot").className = "dot";
     if (wasError) {
       wasError = false;
@@ -218,6 +222,7 @@ function connectStream() {
   };
 
   es.onmessage = e => {
+    lastMsgTs = Date.now();
     const d = JSON.parse(e.data);
     if (d.type === "connected") { setMonState(d.running); return; }
     if (d.type === "monitor_paused")  { setMonState(false); return; }
@@ -229,6 +234,17 @@ function connectStream() {
     document.getElementById("liveDot").className = "dot error";
     wasError = true;
   };
+
+  // 무신호 12초↑면 연결 죽은 것 → 자동 재연결
+  if (!sseWatchdogId) {
+    sseWatchdogId = setInterval(() => {
+      if (Date.now() - lastMsgTs > 12000) {
+        document.getElementById("liveDot").className = "dot error";
+        wasError = true;
+        connectStream();
+      }
+    }, 4000);
+  }
 }
 
 function applyChanges(cells, updated) {
