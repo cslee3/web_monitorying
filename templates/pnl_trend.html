@@ -18,22 +18,27 @@
   .ln{ width:16px; height:3px; border-radius:2px; display:inline-block; }
   .chart-wrap{ position:relative; width:100%; height:480px; margin-bottom:30px; }
   table{ border-collapse:collapse; width:100%; min-width:760px; }
-  thead th{ font-size:14px; font-weight:600; color:var(--muted); text-align:right; padding:10px 14px; }
-  thead th.lab{ text-align:left; }
-  tbody td{ font-size:15px; text-align:right; padding:10px 14px; font-variant-numeric:tabular-nums; white-space:nowrap; }
-  tbody td.lab{ text-align:left; color:var(--muted); white-space:nowrap; }
-  tr.sum td{ border-top:1px solid var(--line2); font-weight:600; }
+  thead th{ font-size:13px; font-weight:600; color:var(--muted); text-align:right; padding:9px 13px; border-bottom:1.5px solid var(--line2); }
+  thead th.lab{ text-align:center; border-right:1px solid var(--line2); }
+  tbody td{ font-size:15px; text-align:right; padding:9px 13px; font-variant-numeric:tabular-nums; white-space:nowrap; border-bottom:1px solid var(--line); }
+  tbody tr:last-child td{ border-bottom:none; }
+  tbody td.lab{ text-align:center; color:var(--muted); white-space:nowrap; font-size:13px; padding-left:5px; padding-right:5px; border-right:1px solid var(--line2); }
+  tr.sum td{ border-top:1.5px solid var(--line2); border-bottom-color:var(--line2); font-weight:600; }
   tr.sum td.lab{ color:var(--ink); }
-  tr.book td{ border-top:1px solid var(--line); color:var(--muted); }
+  tr.book td{ color:var(--muted); }
+  .ytd{ border-left:1px solid var(--line2); font-weight:600; }
+  thead th.ytd{ color:var(--ink); }
+  td.lab.parent{ vertical-align:middle; color:var(--ink); border-right:none; padding-left:3px; padding-right:3px; }
+  td.lab.sub{ color:var(--muted); padding-left:3px; padding-right:5px; }
 </style>
 </head>
 <body>
-<script>window.PNL_DATA = {"months": ["1월", "2월", "3월", "4월", "5월", "6월", "7월", "8월", "9월", "10월", "11월", "12월"], "pnlRows": ["주식파생", "지수파생", "차익거래", "합계"], "notional": "장부금액", "series": {"주식파생": [-212, -487, -773, -722, -606, -269.08, null, null, null, null, null, null], "지수파생": [-180, -239, 506, 579, -48, -48.33, null, null, null, null, null, null], "차익거래": [83, 292, 663, 719, 4159, 9036.92, null, null, null, null, null, null], "합계": [-309, -434, 396, 576, 3505, 8719.51, null, null, null, null, null, null], "장부금액": [487, 1550, 2100, 3250, 10750, 12300, null, null, null, null, null, null]}, "basedate": "2026-06-17", "unit": "단위 백만원"};</script>
+<script>window.PNL_DATA = {"months": ["1월", "2월", "3월", "4월", "5월", "6월", "7월", "8월", "9월", "10월", "11월", "12월"], "notional": "장부금액", "series": {"주식파생": [-212, -275, -286, 51, 116, 352.45, null, null, null, null, null, null], "지수파생": [-180, -59, 745, 73, -627, 2.44, null, null, null, null, null, null], "차익거래": [0, 0, 371, 56, 2915, 4934.72, null, null, null, null, null, null], "합계": [-309, -125, 830, 180, 2929, 6010.61, null, null, null, null, null, null], "장부금액": [459.71, 1473.76, 2457.81, 2483.09, 7659.1, 10629.47, null, null, null, null, null, null], "평가금액": [484.3, 1555.79, 2154.21, 2889.4, 10876.8, 15845.56, null, null, null, null, null, null]}, "tableRows": [{"label": "주식파생", "sub": "", "vals": [-212, -275, -286, 51, 116, 352.45, null, null, null, null, null, null], "ytd": -253.55}, {"label": "지수파생", "sub": "", "vals": [-180, -59, 745, 73, -627, 2.44, null, null, null, null, null, null], "ytd": -45.56}, {"label": "차익거래", "sub": "주식", "vals": [0, 0, 371, 56, 2915, 4934.72, null, null, null, null, null, null], "ytd": 8276.72}, {"label": "", "sub": "ELW", "vals": [83, 209, 0, 0, 525, 721, null, null, null, null, null, null], "ytd": 1538}, {"label": "합계", "sub": "", "vals": [-309, -125, 830, 180, 2929, 6010.61, null, null, null, null, null, null], "ytd": 9515.61}, {"label": "장부금액", "sub": "", "vals": [459.71, 1473.76, 2457.81, 2483.09, 7659.1, 10629.47, null, null, null, null, null, null], "ytd": null}], "basedate": "2026-06-19", "unit": "단위 백만원"};</script>
 <div class="lgrow">
   <div class="lg" id="legend"></div>
   <span class="s" id="sub"></span>
 </div>
-<div class="chart-wrap"><canvas id="pnlChart" role="img" aria-label="월별 MM 손익(좌축)과 장부금액(우축) 추세"></canvas></div>
+<div class="chart-wrap"><canvas id="pnlChart" role="img" aria-label="월별 누적손익(좌축)과 장부금액(우축) 추세"></canvas></div>
 <div id="tbl" style="overflow-x:auto;"></div>
 
 <script src="chart.umd.js"></script>
@@ -42,33 +47,52 @@
   var D = window.PNL_DATA || {months:[],series:{},pnlRows:[],notional:'',basedate:'',unit:''};
   var C = { '주식파생':'#378ADD','지수파생':'#EF9F27','차익거래':'#9A9892','장부금액':'#0C447C','합계':'#E0A82E' };
   var POS='#A32D2D', NEG='#185FA5', MUTED='#5F5E5A';
-  function fmt(v){ return (v===null||v===undefined) ? '–' : Math.round(v).toLocaleString('en-US'); }
+  function fmt(v){ return (v===null||v===undefined) ? '' : Math.round(v).toLocaleString('en-US'); }
   function col(v){ return (v===null||v===undefined||v===0) ? '#8a8a85' : (v>0?POS:NEG); }
 
   document.getElementById('sub').textContent =
     (D.basedate ? '기준일 '+D.basedate+' · ' : '') + (D.unit||'');
 
   var lg = document.getElementById('legend'); var html='';
-  html += '<span><span class="ln" style="background:'+C['합계']+'"></span>손익합계 <span style="color:#8a8a85">(좌축)</span></span>';
+  html += '<span><span class="ln" style="background:'+C['합계']+'"></span>누적손익 <span style="color:#8a8a85">(좌축)</span></span>';
   html += '<span style="color:#d4d4d0">│</span>';
   html += '<span><span class="sw" style="background:'+C[D.notional]+'"></span>'+D.notional+' <span style="color:#8a8a85">(우축)</span></span>';
   lg.innerHTML = html;
 
-  var order = D.pnlRows.concat([D.notional]);
-  var colg = '<colgroup><col style="width:88px">' + D.months.map(function(){ return '<col>'; }).join('') + '<col style="width:64px"></colgroup>';
+  var colg = '<colgroup><col style="width:70px"><col style="width:46px">' + D.months.map(function(){ return '<col>'; }).join('') + '<col style="width:84px"><col style="width:64px"></colgroup>';
   var thM = D.months.map(function(m){ return '<th>'+m+'</th>'; }).join('');
-  var body = order.map(function(n){
-    var isSum = (n==='합계'), isBook = (n===D.notional), pnl = !isBook;
-    var cls = isSum ? 'sum' : (isBook ? 'book' : '');
-    var arr = D.series[n] || [];
-    var cells = arr.map(function(v){
+  function vcells(r){
+    var pnl = (r.label!==D.notional);
+    var cs = (r.vals||[]).map(function(v){
       var c = pnl ? col(v) : (v==null?'#8a8a85':MUTED);
       return '<td style="color:'+c+'">'+fmt(v)+'</td>';
     }).join('');
-    return '<tr class="'+cls+'"><td class="lab">'+(n==='합계'?'손익합계':n)+'</td>'+cells+'<td></td></tr>';
-  }).join('');
+    var yv = (r.ytd!=null) ? r.ytd : null;
+    var yc = pnl ? col(yv) : (yv==null?'#8a8a85':MUTED);
+    return cs + '<td class="ytd" style="color:'+yc+'">'+fmt(yv)+'</td><td></td>';
+  }
+  var rows = D.tableRows || [];
+  var body = '';
+  for(var i=0;i<rows.length;i++){
+    var r = rows[i];
+    if(r.sub){                                  // 하위행 그룹(예: 차익거래 = 주식+ELW)
+      var grp=[r], j=i+1;
+      while(j<rows.length && !rows[j].label && rows[j].sub){ grp.push(rows[j]); j++; }
+      for(var g=0; g<grp.length; g++){
+        var gr=grp[g];
+        var ptd = (g===0) ? '<td class="lab parent" rowspan="'+grp.length+'">'+r.label+'</td>' : '';
+        body += '<tr>'+ptd+'<td class="lab sub">'+gr.sub+'</td>'+vcells(gr)+'</tr>';
+      }
+      i = j-1;
+    } else {                                    // 단일행
+      var n=r.label, isSum=(n==='합계'), isBook=(n===D.notional);
+      var cls=isSum?'sum':(isBook?'book':'');
+      var disp=(n==='합계')?'손익':n;
+      body += '<tr class="'+cls+'"><td class="lab" colspan="2">'+disp+'</td>'+vcells(r)+'</tr>';
+    }
+  }
   document.getElementById('tbl').innerHTML =
-    '<table style="table-layout:fixed;width:100%">'+colg+'<thead><tr><th class="lab"></th>'+thM+'<th></th></tr></thead><tbody>'+body+'</tbody></table>';
+    '<table style="table-layout:fixed;width:100%">'+colg+'<thead><tr><th class="lab" colspan="2"></th>'+thM+'<th class="ytd">연간합계</th><th></th></tr></thead><tbody>'+body+'</tbody></table>';
 
   if(typeof Chart==='undefined'){ return; }
   if(Chart.Tooltip && Chart.Tooltip.positioners){
@@ -91,11 +115,13 @@
                                yAxisID:axis,borderRadius:2,categoryPercentage:0.8,barPercentage:0.9,maxBarThickness:40}; }
   var ds = [];
   ds.push(bar(D.notional,'y1'));
-  ds.push({type:'line',label:'손익합계',data:D.series['합계'],yAxisID:'y',
+  // 손익선 = 월별 합계의 누적합(cumsum), 데이터 없는 월(null)은 끊음
+  function cumsum(arr){ var out=[], run=0; (arr||[]).forEach(function(v){ if(v==null){ out.push(null); } else { run+=v; out.push(Math.round(run*100)/100); } }); return out; }
+  var cum = cumsum(D.series['합계']);
+  ds.push({type:'line',label:'누적손익',data:cum,yAxisID:'y',
            borderColor:C['합계'],backgroundColor:C['합계'],borderWidth:3.75,pointRadius:2.5,tension:0.3});
   // 두 축의 0(영점) 위치를 일치시킴: min/max 비율을 동일하게 맞춤
-  function _flat(keys){ var a=[]; keys.forEach(function(k){ (D.series[k]||[]).forEach(function(v){ if(v!=null)a.push(v); }); }); return a; }
-  var _L=_flat(['합계']), _R=(D.series[D.notional]||[]).filter(function(v){ return v!=null; });
+  var _L=cum.filter(function(v){ return v!=null; }), _R=(D.series[D.notional]||[]).filter(function(v){ return v!=null; });
   var Lmax=Math.max.apply(null,[0].concat(_L))*1.08, Lmin=Math.min.apply(null,[0].concat(_L))*1.08;
   var Rmax=Math.max.apply(null,[0].concat(_R))*1.08, Rmin=Math.min.apply(null,[0].concat(_R))*1.08;
   var _lo=Lmax?Lmin/Lmax:0, _ro=Rmax?Rmin/Rmax:0;
@@ -109,19 +135,22 @@
           callbacks:{ label:function(c){ return c.dataset.label+': '+(c.parsed.y==null?'–':Math.round(c.parsed.y).toLocaleString()); } } } },
       scales:{
         x:{ grid:{display:false}, ticks:{ color:MUTED, font:{size:12} } },
-        y:{ position:'left',  min:Lmin, max:Lmax, afterFit:function(a){ a.width=88; }, title:{display:true,text:'손익',color:MUTED,font:{size:12}},
+        y:{ position:'left',  min:Lmin, max:Lmax, afterFit:function(a){ a.width=88; }, title:{display:true,text:'누적손익',color:MUTED,font:{size:12}},
             grid:{ color:'rgba(0,0,0,0.07)' }, ticks:{ color:MUTED, font:{size:12}, callback:function(v){ return Math.round(v).toLocaleString(); } } },
         y1:{ position:'right', min:Rmin, max:Rmax, afterFit:function(a){ a.width=64; }, title:{display:true,text:'장부금액',color:MUTED,font:{size:12}},
             grid:{ drawOnChartArea:false }, ticks:{ color:MUTED, font:{size:12}, callback:function(v){ return Math.round(v).toLocaleString(); } } }
       } }
   });
-  var NUDGE = 14;  // 표 월 위치 미세조정(px, 양수=오른쪽으로)
+  var YTDW = 84, LABELW = 116, SPACERW = 58;   // 연간합계 폭 / 라벨 2칸 합(70+46) / 우측여백
   function _syncMonths(){
-    var ca=_chart.chartArea, cg=document.querySelector('#tbl colgroup'), tbl=document.querySelector('#tbl table');
-    if(!ca || !cg || !cg.children.length || !tbl) return;
-    var tw=tbl.getBoundingClientRect().width;
-    cg.children[0].style.width = Math.round(ca.left+NUDGE)+'px';
-    cg.children[cg.children.length-1].style.width = Math.max(0, Math.round(tw-ca.right-NUDGE))+'px';
+    var cg=document.querySelector('#tbl colgroup'), tbl=document.querySelector('#tbl table'), cont=document.getElementById('tbl');
+    if(!cg || cg.children.length<16 || !tbl || !cont) return;
+    // 라벨은 고정, 월 12칸+연간합계를 컨테이너 가용폭에 정확히 맞춤(가로 스크롤바 방지)
+    var tw=cont.clientWidth - 2;
+    var monthW=Math.max(26,(tw - LABELW - YTDW - SPACERW)/12);
+    for(var k=0;k<12;k++){ cg.children[2+k].style.width=monthW+'px'; }
+    cg.children[14].style.width=YTDW+'px';
+    cg.children[15].style.width=SPACERW+'px';
   }
   requestAnimationFrame(function(){ _syncMonths(); requestAnimationFrame(_syncMonths); });
   window.addEventListener('resize', function(){ requestAnimationFrame(_syncMonths); });

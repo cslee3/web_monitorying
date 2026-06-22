@@ -24,3 +24,15 @@ wheels/
 
 # Claude Code
 .claude/
+
+# VBA 덤프 (Goldilocks DB 비밀번호 포함 — 절대 커밋 금지)
+vba_dump.txt
+vba_dump.py
+
+# 배포 빌드 산출물
+banyoung/
+banyoung_*.zip
+
+# 런타임 로그
+*.log
+log/

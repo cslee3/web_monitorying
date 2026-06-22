@@ -25,18 +25,26 @@
   .dot.live { background: #2ecc71; }
   .dot.error { background: #e74c3c; }
 
-  .table-wrap { overflow: auto; flex: 1; min-height: 0; }
+  .table-wrap { overflow: auto; flex: 1; min-height: 0; display: flex; flex-direction: row; align-items: flex-start; gap: 10px; }
+  .mm-col  { flex: none; }
+  .idx-col { flex: none; display: flex; flex-direction: column; gap: 12px; padding-top: 2px; }
+  #idxWrap table { border-collapse: collapse; white-space: nowrap; outline: 1px solid #000; outline-offset: -1px; margin: 0; }
+  #idxWrap thead th { position: static; background: #DEE7ED; color: #000; font-weight: bold;
+    padding: 4px 6px; font-size: 12px; text-align: center; border: 1px solid #b6c2cc; border-bottom: 1px solid #000; }
+  #idxWrap td { padding: 2px 6px; border: 1px solid #e0e0e0; text-align: right; }
+  #idxWrap tr:hover td { background: #fffde7 !important; }
+  #idxWrap .total-row td { font-weight: bold; }
 
   table { border-collapse: collapse; white-space: nowrap; outline: 1px solid #000; outline-offset: -1px; margin-left: 3px; margin-top: 2px; }
   thead th {
     background: #DEE7ED; color: #000; font-weight: bold; padding: 3px 3px;
     position: sticky; top: 0; z-index: 5;
-    font-size: 11px; text-align: center; border: 1px solid #b6c2cc; border-bottom: 1px solid #000;
+    font-size: 12px; text-align: center; border: 1px solid #b6c2cc; border-bottom: 1px solid #000;
     vertical-align: bottom;
   }
   thead th.diff-hdr { background: #FFC000; }
   .th-sub { display: block; font-weight: normal; font-size: 9px; opacity: 0.65; margin-top: 2px; }
-  td { padding: 2px 3px; border: 1px solid #e0e0e0; }
+  td { padding: 2px 3px; border: 1px solid #e0e0e0; font-size: 12px; }
   tr:hover td { background: #fffde7 !important; }
   .total-row td { font-weight: bold; border-top: 1px solid #000; border-bottom: 1px solid #000; box-shadow: inset 0 1px 0 #000; }
   .sep-row td { background: #f0f0f0; height: 5px; padding: 0; border: none; }
@@ -88,10 +96,13 @@
 <div id="status">데이터 로딩 중...</div>
 
 <div class="table-wrap" id="tableWrap" style="display:none">
-  <table id="mmTable">
-    <thead id="thead"></thead>
-    <tbody id="tbody"></tbody>
-  </table>
+  <div class="mm-col">
+    <table id="mmTable">
+      <thead id="thead"></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+  <div class="idx-col" id="idxWrap"></div>
 </div>
 
 <script>
@@ -140,6 +151,11 @@ const STRIPE_SKIP_CIDX = new Set([0, 1, 4, 10, 16, 17, 20, 21, 23, 24, 26]);
 // 굵은 세로선(오른쪽 테두리) 적용 컬럼
 const VLINE_CIDX = new Set([1, 3, 4, 6, 7, 10, 11, 12, 13, 15, 17, 18, 19, 21, 22, 24]);
 
+// === idx(raw) 섹션 표시용 (ssf_mm2와 동일) ===
+const GRAY_HDRS      = new Set(["IdxCode", "IndexCode", "IndexName", "Fund", "Udly"]);
+const VLINE_HDRS     = new Set(["Fund", "Volume", "Udly"]);
+const VLINE_BOTH_HDRS= new Set(["△Shares"]);
+
 function setStripe(tr, isOdd) {
   tr.querySelectorAll("td").forEach((td, i) => {
     const cidx = colOrder[i]?.cidx;
@@ -157,6 +173,9 @@ function toggleFilter(mode) {
 }
 
 function applyFilter() {
+  // DIM 필터(1/2) 사용 시 우측 idx 표 숨김 → 전체 폭 축소
+  const idxWrap = document.getElementById("idxWrap");
+  if (idxWrap) idxWrap.style.display = filterMode === 0 ? "" : "none";
   const rows = document.querySelectorAll("#tbody tr");
   let visIdx = 0;
   rows.forEach(tr => {
@@ -285,13 +304,93 @@ function buildTable(d) {
 
   document.getElementById("tbody").innerHTML = html;
 
+  buildIdxTables(d);
+
   document.getElementById("status").style.display    = "none";
   document.getElementById("infoBar").style.display   = "flex";
-  document.getElementById("tableWrap").style.display = "block";
+  document.getElementById("tableWrap").style.display = "flex";
 
   lockColWidths();
 
   if (tw) { tw.scrollLeft = savedLeft; tw.scrollTop = savedTop; }
+}
+
+// idx(raw) 섹션 표 → 우측 #idxWrap (ssf_mm2 로직 포팅)
+function buildIdxTables(d) {
+  const idxSections = d.sections.filter(s => s.raw);
+  let html = "";
+  for (const sec of idxSections) {
+    const rows = sec.rows;
+    if (!rows.length) continue;
+
+    const headerVals = sec.has_header ? rows[0].map(c => c.v) : (sec.header || []);
+    const grayCi  = new Set();
+    const vlineCi = new Set();
+    headerVals.forEach((h, i) => {
+      const name = String(h).trim();
+      if (GRAY_HDRS.has(name))  grayCi.add(i);
+      if (VLINE_HDRS.has(name)) vlineCi.add(i);
+      if (VLINE_BOTH_HDRS.has(name)) { vlineCi.add(i); if (i > 0) vlineCi.add(i - 1); }
+    });
+    if (sec.id === "idx6") headerVals.forEach((h, i) => {
+      if (["Delta", "Gamma", "Amt"].includes(String(h).trim())) vlineCi.add(i);
+    });
+    if (sec.id === "idx2" || sec.id === "idxS") grayCi.add(0);
+    if (sec.id === "idx2" || sec.id === "idxS" || sec.id === "idx7") vlineCi.add(0);
+
+    const startRow  = sec.has_header ? 1 : 0;
+    const theadHtml = headerVals.length
+      ? "<thead><tr>" + headerVals.map((h, i) =>
+          `<th${vlineCi.has(i) ? ' style="border-right:1px solid #000"' : ''}>${h}</th>`).join("") + "</tr></thead>"
+      : "";
+
+    const isIdx7 = sec.id === "idx7";
+    const SUBHDR_VALS = new Set(["△Amount", "Strike", "Theo PnL", "MTM PnL"]);
+    let tbody = "";
+    for (let ri = startRow; ri < rows.length; ri++) {
+      const row = rows[ri];
+      const isTotal = String((row[0] && row[0].v) || "").trim() === "합계";
+      if (isTotal) {
+        const span = Math.min(3, row.length);
+        const mergeVline = vlineCi.has(span - 1) ? ";border-right:1px solid #000" : "";
+        let cells = `<td colspan="${span}" style="background:#e2efda;text-align:center;box-shadow:inset 0 1px 0 #000${mergeVline}">합계</td>`;
+        for (let ci = span; ci < row.length; ci++) {
+          const vl = vlineCi.has(ci) ? "border-right:1px solid #000;" : "";
+          cells += `<td id="c-${sec.id}-${ri}-${ci}" style="background:#fff;box-shadow:inset 0 1px 0 #000;${vl}">${(row[ci] && row[ci].v) || ""}</td>`;
+        }
+        tbody += `<tr class="total-row">${cells}</tr>`;
+        continue;
+      }
+      const isCostRow = row.some(c => String((c && c.v) || "").trim() === "Cost");
+      const u0 = String((row[0] && row[0].v) || "").trim();
+      const topLine    = isCostRow || (sec.id === "idx6" && (u0 === "KSQ150" || ri === rows.length - 1));
+      const bottomLine = isCostRow || (sec.id === "idx3" && u0 === "K2G01P");
+      const _sh = [];
+      if (topLine)    _sh.push("inset 0 1px 0 #000");
+      if (bottomLine) _sh.push("inset 0 -1px 0 #000");
+      const boxShadow = _sh.length ? `box-shadow:${_sh.join(",")}` : "";
+      tbody += "<tr>" + row.map((cell, ci) => {
+        const v     = cell.v;
+        const bg    = cell.bg || "";
+        const alert = ci === 0 && v === "Alert";
+        let style   = "";
+        const gray  = grayCi.has(ci) && !(isCostRow && ci < 2);
+        if (sec.id === "idx5" && SUBHDR_VALS.has(v)) style = "background:#DEE7ED;color:#000;font-weight:bold;text-align:center;box-shadow:" + ((v === "Theo PnL" || v === "MTM PnL") ? "inset 0 2px 0 #000" : "inset 0 2px 0 #000,inset 0 -2px 0 #000");
+        else if (isIdx7 && ci === 0) style = "background:#DEE7ED;color:#000;font-weight:bold";
+        else if (alert)         style = "background:#ffff00;color:#cc0000;font-weight:bold;text-align:center";
+        else if (bg)            style = `background:${bg}`;
+        else if (gray)          style = "background:#D9D9D9";
+        if (vlineCi.has(ci) && !(isCostRow && String(v).trim() === "Cost"))
+                                style += (style ? ";" : "") + "border-right:1px solid #000";
+        if (boxShadow)          style += (style ? ";" : "") + boxShadow;
+        const grayAttr = gray ? ' data-gray="1"' : "";
+        return `<td id="c-${sec.id}-${ri}-${ci}"${grayAttr}${style ? ` style="${style}"` : ""}>${v}</td>`;
+      }).join("") + "</tr>";
+    }
+
+    html += `<div class="table-section"><table>${theadHtml}<tbody>${tbody}</tbody></table></div>`;
+  }
+  document.getElementById("idxWrap").innerHTML = html;
 }
 
 // 컬럼 폭을 빌드 시점(전체 행) 기준으로 고정 → DIM 필터로 행 숨겨도 폭 불변. Diff(cidx 13)는 1.2배.
@@ -309,15 +408,23 @@ function lockColWidths() {
   const tds = row.children;
   if (tds.length !== colOrder.length) return;
   const cg = document.createElement("colgroup");
+  let total = 0;
   for (let k = 0; k < tds.length; k++) {
     let w = tds[k].getBoundingClientRect().width;
     if (colOrder[k] && colOrder[k].cidx === 13) w *= 1.2;
+    else if (colOrder[k] && (colOrder[k].cidx === 25 || colOrder[k].cidx === 26)) w *= 0.8;
+    w = Math.round(w);
     const col = document.createElement("col");
-    col.style.width = Math.round(w) + "px";
+    col.style.width = w + "px";
     cg.appendChild(col);
+    total += w;
   }
   table.insertBefore(cg, table.firstChild);
   table.style.tableLayout = "fixed";
+  // 표 전체 폭도 픽셀로 못박음 → flex 레이아웃/필터로 행 숨겨도 폭 불변
+  table.style.width = total + "px";
+  table.style.minWidth = total + "px";
+  table.style.maxWidth = total + "px";
 }
 
 // F=4, R=16, S=17, AB=26 — ColorScale 그라디언트 적용 컬럼
@@ -473,8 +580,19 @@ function applyChanges(cells, updated, header) {
     const ri   = parts[1];
     const cidx = Number(parts[2]);
 
-    // ssf_mm.html은 MM 섹션만 처리
-    if (sid.startsWith("idx")) continue;
+    // idx(raw) 섹션 셀 갱신 (ssf_mm2 로직 포팅)
+    if (sid.startsWith("idx")) {
+      const itd = document.getElementById(`c-${sid}-${ri}-${parts[2]}`);
+      if (!itd) continue;
+      itd.textContent = v;
+      if (Number(parts[2]) === 0) {
+        if (v === "Alert") { itd.style.background = "#ffff00"; itd.style.color = "#cc0000"; itd.style.fontWeight = "bold"; }
+        else { itd.style.background = itd.dataset.gray ? "#D9D9D9" : ""; itd.style.color = ""; itd.style.fontWeight = ""; }
+      } else {
+        itd.style.background = bg || (itd.dataset.gray ? "#D9D9D9" : "");
+      }
+      continue;
+    }
 
     const td = document.getElementById(`c-${sid}-${ri}-${cidx}`);
     if (!td) continue;

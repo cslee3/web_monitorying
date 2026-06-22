@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<title>PnL Trend</title>
+<style>
+  :root{ --pos:#A32D2D; --neg:#185FA5; --ink:#1f2328; --muted:#5F5E5A; --hint:#8a8a85;
+         --line:#e3e3df; --line2:#cfcfca; --bg:#fff; --emph:#f4f6f9;
+         --c-stk:#378ADD; --c-idx:#EF9F27; --c-arb:#9A9892; --c-book:#0C447C; --c-sum:#E0A82E; }
+  *{ box-sizing:border-box; }
+  body{ font-family:'Segoe UI','Malgun Gothic',sans-serif; color:var(--ink); background:var(--bg);
+        margin:0; padding:18px 28px; }
+  .lgrow{ display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin:2px 0 12px; }
+  .s{ font-size:13px; color:var(--hint); }
+  .lg{ display:flex; flex-wrap:wrap; gap:16px; font-size:13px; color:var(--muted); }
+  .lg span{ display:inline-flex; align-items:center; gap:5px; }
+  .sw{ width:10px; height:10px; border-radius:2px; display:inline-block; }
+  .ln{ width:16px; height:3px; border-radius:2px; display:inline-block; }
+  .chart-wrap{ position:relative; width:100%; height:480px; margin-bottom:30px; }
+  table{ border-collapse:collapse; width:100%; min-width:760px; }
+  thead th{ font-size:13px; font-weight:600; color:var(--muted); text-align:right; padding:9px 13px; border-bottom:1.5px solid var(--line2); }
+  thead th.lab{ text-align:center; border-right:1px solid var(--line2); }
+  tbody td{ font-size:15px; text-align:right; padding:9px 13px; font-variant-numeric:tabular-nums; white-space:nowrap; border-bottom:1px solid var(--line); }
+  tbody tr:last-child td{ border-bottom:none; }
+  tbody td.lab{ text-align:center; color:var(--muted); white-space:nowrap; font-size:13px; padding-left:5px; padding-right:5px; border-right:1px solid var(--line2); }
+  tr.sum td{ border-top:1.5px solid var(--line2); border-bottom-color:var(--line2); font-weight:600; }
+  tr.sum td.lab{ color:var(--ink); }
+  tr.book td{ color:var(--muted); }
+  .ytd{ border-left:1px solid var(--line2); font-weight:600; }
+  thead th.ytd{ color:var(--ink); }
+  td.lab.parent{ vertical-align:middle; color:var(--ink); border-right:none; padding-left:3px; padding-right:3px; }
+  td.lab.sub{ color:var(--muted); padding-left:3px; padding-right:5px; }
+</style>
+</head>
+<body>
+<script>window.OUT_DATA = {"months": ["1월", "2월", "3월", "4월", "5월", "6월", "7월", "8월", "9월", "10월", "11월", "12월"], "rows": ["장부금액", "평가금액"], "series": {"장부금액": [459.71, 1473.76, 2457.81, 2483.09, 7659.1, 10629.47, null, null, null, null, null, null], "평가금액": [484.3, 1555.79, 2154.21, 2889.4, 10876.8, 15845.56, null, null, null, null, null, null]}, "ytd": {"장부금액": null, "평가금액": null}, "basedate": "2026-06-19", "unit": "단위 백만원"};</script>
+<div class="lgrow">
+  <div class="lg" id="legend"></div>
+  <span class="s" id="sub"></span>
+</div>
+<div class="chart-wrap"><canvas id="outChart" role="img" aria-label="월별 장부금액·평가금액 추세"></canvas></div>
+<div id="outtbl" style="overflow-x:auto;"></div>
+
+<script src="chart.umd.js"></script>
+<script>
+(function(){
+  var D = window.OUT_DATA || {months:[],series:{},rows:[],basedate:'',unit:''};
+  var C = { '장부금액':'#0C447C', '평가금액':'#1D9E75' };
+  var MUTED='#5F5E5A';
+  function fmt(v){ return (v===null||v===undefined) ? '' : Math.round(v).toLocaleString('en-US'); }
+
+  document.getElementById('sub').textContent =
+    (D.basedate ? '기준일 '+D.basedate+' · ' : '') + (D.unit||'');
+
+  var lg = document.getElementById('legend'); var html='';
+  D.rows.forEach(function(n){
+    html += '<span><span class="sw" style="background:'+(C[n]||'#888')+'"></span>'+n+'</span>';
+  });
+  lg.innerHTML = html;
+
+  var colg = '<colgroup><col style="width:88px">' + D.months.map(function(){ return '<col>'; }).join('') + '<col style="width:64px"></colgroup>';
+  var thM = D.months.map(function(m){ return '<th>'+m+'</th>'; }).join('');
+  var body = D.rows.map(function(n){
+    var arr = D.series[n] || [];
+    var cells = arr.map(function(v){ return '<td>'+fmt(v)+'</td>'; }).join('');
+    return '<tr><td class="lab" style="color:'+(C[n]||MUTED)+';font-weight:600">'+n+'</td>'+cells+'<td></td></tr>';
+  }).join('');
+  document.getElementById('outtbl').innerHTML =
+    '<table style="table-layout:fixed;width:100%">'+colg+'<thead><tr><th class="lab"></th>'+thM+'<th></th></tr></thead><tbody>'+body+'</tbody></table>';
+
+  if(typeof Chart==='undefined'){ return; }
+  if(Chart.Tooltip && Chart.Tooltip.positioners){
+    Chart.Tooltip.positioners.rightBar = function(items){
+      if(!items.length) return false;
+      var it=items[0];
+      for(var i=1;i<items.length;i++){ if(items[i].element.x > it.element.x) it=items[i]; }
+      var el=it.element; var w=(el && el.width)?el.width:0;
+      var ymid=(el.y!=null && el.base!=null) ? (el.y+el.base)/2 : el.y;
+      return { x: el.x + w/2, y: ymid };
+    };
+  }
+  var ds = D.rows.map(function(n){
+    return {type:'bar',label:n,data:D.series[n],backgroundColor:C[n]||'#888',
+            borderRadius:2,categoryPercentage:0.7,barPercentage:0.9,maxBarThickness:40};
+  });
+  var _chart = new Chart(document.getElementById('outChart'),{
+    data:{ labels:D.months, datasets:ds },
+    options:{ responsive:true, maintainAspectRatio:false,
+      interaction:{ mode:'index', intersect:false },
+      plugins:{ legend:{display:false},
+        tooltip:{ position:'rightBar', xAlign:'left',
+          callbacks:{ label:function(c){ return c.dataset.label+': '+(c.parsed.y==null?'–':Math.round(c.parsed.y).toLocaleString()); } } } },
+      scales:{
+        x:{ grid:{display:false}, ticks:{ color:MUTED, font:{size:12} } },
+        y:{ position:'left', afterFit:function(a){ a.width=88; }, grid:{ color:'rgba(0,0,0,0.07)' },
+            ticks:{ color:MUTED, font:{size:12}, callback:function(v){ return Math.round(v).toLocaleString(); } } }
+      } }
+  });
+  function _syncMonths(){
+    var ca=_chart.chartArea, cg=document.querySelector('#outtbl colgroup'), tbl=document.querySelector('#outtbl table');
+    if(!ca || !cg || !cg.children.length || !tbl) return;
+    var tw=tbl.getBoundingClientRect().width;
+    cg.children[0].style.width = Math.round(ca.left)+'px';
+    cg.children[cg.children.length-1].style.width = Math.max(0, Math.round(tw-ca.right))+'px';
+  }
+  requestAnimationFrame(function(){ _syncMonths(); requestAnimationFrame(_syncMonths); });
+  window.addEventListener('resize', function(){ requestAnimationFrame(_syncMonths); });
+})();
+</script>
+</body>
+</html>
