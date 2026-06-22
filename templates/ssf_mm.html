@@ -312,6 +312,10 @@ function buildTable(d) {
 
   lockColWidths();
 
+  // 재빌드(재연결 등) 후 행·idx(#idxWrap)를 현재 DIM 필터 상태에 항상 재동기화
+  // → 필터 풀림 + idx만 숨김 채 남는 불일치 방지
+  applyFilter();
+
   if (tw) { tw.scrollLeft = savedLeft; tw.scrollTop = savedTop; }
 }
 
