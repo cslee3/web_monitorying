@@ -907,6 +907,10 @@ def generate_html(out_path=None, open_browser=True, _data=None):
         if si < len(mm_sections) - 1:
             tbody += f'<tr><td colspan="{len(cols)}" style="height:5px;background:#f0f0f0"></td></tr>'
 
+    # idx(raw) 표 — 라이브 ssf_mm과 동일하게 MM 표 우측에 함께 표시
+    idx_sections = [s for s in data["sections"] if s.get("raw")]
+    idx_body     = _idx_tables_html(idx_sections)
+
     html = f"""<!DOCTYPE html>
 <html lang="ko"><head><meta charset="UTF-8"/>
 <title>SSF MM Snapshot</title>
@@ -919,6 +923,8 @@ def generate_html(out_path=None, open_browser=True, _data=None):
   th {{ background:#202123; color:#fff; padding:4px 7px; font-size:11px; text-align:center; border:1px solid #444; border-bottom:1px solid #000; vertical-align:bottom; }}
   td {{ padding:2px 6px; border:1px solid #e0e0e0; }}
   tr:hover td {{ background:#fffde7 !important; }}
+  .idxcol {{ display:flex; flex-direction:column; }}
+  .idxcol th {{ background:#DEE7ED; color:#000; border:1px solid #b6c2cc; }}
 </style></head><body>
 <div class="info">
   <div>BaseDate: <span>{header["base_date"]}</span></div>
@@ -928,7 +934,10 @@ def generate_html(out_path=None, open_browser=True, _data=None):
   <div>Expiry2: <span>{header["exp2"]}</span></div>
   <div class="ts">Snapshot: {now}</div>
 </div>
-<table><thead><tr>{ths}</tr></thead><tbody>{tbody}</tbody></table>
+<div style="display:flex;align-items:flex-start;gap:10px">
+  <table><thead><tr>{ths}</tr></thead><tbody>{tbody}</tbody></table>
+  <div class="idxcol">{idx_body}</div>
+</div>
 </body></html>"""
 
     with open(out_path, "w", encoding="utf-8") as f:
@@ -946,24 +955,10 @@ _VLINE_HDRS = {"Fund", "Volume", "Udly"}
 # 양옆(좌우) 1px 세로줄 적용 컬럼 헤더 (△Shares) — 자기+왼쪽 칼럼에 right-border
 _VLINE_BOTH_HDRS = {"△Shares"}
 
-def generate_html_idx(out_path=None, open_browser=True, _data=None):
-    """IDX2 섹션 스냅샷 HTML 생성.
-    _data: 이미 읽어둔 데이터 dict. None이면 Excel COM에서 직접 읽음.
-    """
-    import webbrowser
-    pythoncom.CoInitialize()
 
-    if out_path is None:
-        out_path = os.path.join(BASE_DIR, "ssf_idx_snapshot.html")
-
-    if _data is not None:
-        sections = [s for s in _data["sections"] if s.get("raw")]
-    else:
-        _, ws    = monitor._get_xl_ws()
-        bulk     = ws.Range("B2:AL44").Value
-        sections = _read_idx2(bulk)
-    now      = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
+def _idx_tables_html(sections):
+    """idx(raw) 섹션들 → 표 HTML 조각(<div><table>…</table></div> 반복) 반환.
+    스냅샷 공용: 단독 ssf_mm2 + ssf_mm 통합 양쪽에서 사용."""
     body = ""
     for sec in sections:
         rows = sec["rows"]
@@ -1048,6 +1043,28 @@ def generate_html_idx(out_path=None, open_browser=True, _data=None):
             tbody += f"<tr>{tds}</tr>"
 
         body += f'<div style="margin-bottom:10px"><table>{thead_html}<tbody>{tbody}</tbody></table></div>'
+    return body
+
+
+def generate_html_idx(out_path=None, open_browser=True, _data=None):
+    """IDX2 섹션 스냅샷 HTML 생성.
+    _data: 이미 읽어둔 데이터 dict. None이면 Excel COM에서 직접 읽음.
+    """
+    import webbrowser
+    pythoncom.CoInitialize()
+
+    if out_path is None:
+        out_path = os.path.join(BASE_DIR, "ssf_idx_snapshot.html")
+
+    if _data is not None:
+        sections = [s for s in _data["sections"] if s.get("raw")]
+    else:
+        _, ws    = monitor._get_xl_ws()
+        bulk     = ws.Range("B2:AL44").Value
+        sections = _read_idx2(bulk)
+    now      = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    body = _idx_tables_html(sections)
 
     html = f"""<!DOCTYPE html>
 <html lang="ko"><head><meta charset="UTF-8"/>
