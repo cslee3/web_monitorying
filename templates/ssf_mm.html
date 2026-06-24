@@ -401,7 +401,11 @@ function buildIdxTables(d) {
 function lockColWidths() {
   const table = document.getElementById("mmTable");
   if (!table) return;
+  // 재측정 전 이전 고정폭 초기화 → 자연폭 기준으로 다시 측정(재연결 반복 시 폭 누적 방지)
   table.style.tableLayout = "auto";
+  table.style.width = "";
+  table.style.minWidth = "";
+  table.style.maxWidth = "";
   const oldCg = table.querySelector("colgroup");
   if (oldCg) oldCg.remove();
   let row = null;
