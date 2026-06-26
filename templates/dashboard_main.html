@@ -1,0 +1,512 @@
+﻿<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <title>GlobalMM Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Consolas', monospace;
+      background: #f0f2f5;
+      color: #1a1a1a;
+      font-size: 12px;
+    }
+
+    /* ── 전체 레이아웃 ── */
+    .db-header {
+      background: #1a3a6a;
+      color: #fff;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .db-header h1 { font-size: 14px; font-weight: 500; letter-spacing: 1px; }
+    .db-header .meta { font-size: 10px; color: #a8c4e8; }
+    .db-header .time { color: #f0c040; font-size: 11px; }
+
+    .db-body { padding: 10px; display: flex; flex-direction: column; gap: 10px; }
+
+    /* ── 상단 3분할 ── */
+    .top-row { display: grid; grid-template-columns: 400px 1fr; gap: 10px; }
+    .top-right { display: flex; flex-direction: column; gap: 10px; }
+    .top-right .card { display: flex; flex-direction: column; overflow: hidden; }
+    .top-right .card.card-pnl-trend { flex: 6; }
+    .top-right .card.card-out-trend { flex: 4; }
+    .card-pnl-trend .trend-chart-wrap { flex: 0 0 160px; }
+    .card-pnl-trend .trend-tbl-wrap { flex: 1; max-height: none; overflow-y: visible; }
+    .top-right .card iframe { flex: 1; border: none; width: 100%; height: 100%; }
+
+    /* ── PnL Report 카드 내부 스타일 (scoped) ── */
+    .pnl-report { font-family: 'Segoe UI', sans-serif; padding: 8px 12px; }
+    .pnl-report .rpt-meta { color: #aaa; font-size: 11px; margin-bottom: 8px; }
+    .pnl-report table { border-collapse: collapse; table-layout: fixed; }
+    .pnl-report td { border: none; padding: 4px 6px; font-size: 12px; font-variant-numeric: tabular-nums; text-align: center; color: #1a1a1a; }
+    .pnl-report td.num { text-align: right; }
+    .pnl-report td.neg-val { color: #c8000a; }
+    .pnl-report col.c-cat { width: 60px; }
+    .pnl-report col.c-sub { width: 46px; }
+    .pnl-report col.c-num { width: 85px; }
+    .pnl-report tr:nth-child(even) td { background: transparent; }
+    .pnl-report tr:hover td { background: transparent !important; }
+
+    /* ── 하단 전체폭 ── */
+    .bottom-row { display: grid; grid-template-columns: 1fr; gap: 10px; }
+
+    /* ── 공통 카드 ── */
+    .card {
+      background: #fff;
+      border: 1px solid #d0daea;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .card-header {
+      background: #e8eef8;
+      border-bottom: 1px solid #c8d8ee;
+      padding: 5px 10px;
+      font-size: 11px;
+      font-weight: 700;
+      color: #1a3a6a;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+    .card-body { padding: 8px 10px; }
+
+    /* ── KPI 카드 ── */
+    .kpi-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 8px; }
+    .kpi {
+      background: #f4f7fc;
+      border: 1px solid #d0daea;
+      border-radius: 3px;
+      padding: 6px 8px;
+    }
+    .kpi-label { font-size: 9px; color: #7a8a9a; letter-spacing: 0.8px; text-transform: uppercase; margin-bottom: 2px; }
+    .kpi-val { font-size: 18px; font-weight: 500; font-variant-numeric: tabular-nums; line-height: 1.1; }
+    .kpi-sub { font-size: 9px; color: #999; margin-top: 2px; }
+
+    /* ── 테이블 공통 ── */
+    .scroll-x { overflow-x: auto; }
+    table { border-collapse: collapse; white-space: nowrap; width: 100%; }
+    th {
+      background: #e8eef8;
+      color: #3a5a8a;
+      font-size: 10px;
+      padding: 3px 7px;
+      text-align: right;
+      border-bottom: 1px solid #c8d8ee;
+      border-right: 1px solid #dce8f4;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+    th:first-child { text-align: left; }
+    th:last-child { border-right: none; }
+    td {
+      padding: 2px 7px;
+      text-align: right;
+      border-bottom: 1px solid #eef2f8;
+      border-right: 1px solid #eef2f8;
+      font-variant-numeric: tabular-nums;
+    }
+    td:first-child { text-align: left; }
+    td:last-child { border-right: none; }
+    tr:nth-child(even) td { background: #f6f9fd; }
+    tr:hover td { background: #eaf0fb !important; }
+    tr.total-row td {
+      background: #e0e8f4 !important;
+      color: #1a3a6a;
+      font-weight: 500;
+      border-top: 1px solid #9ab8d8;
+    }
+
+    /* ── 양수/음수 색상 (한국 증권 관례) ── */
+    .pos { color: #c8000a; font-weight: 500; }
+    .neg { color: #0042c8; font-weight: 500; }
+    .zero { color: #aaa; }
+
+    /* ── 차트 영역 ── */
+    .chart-wrap { padding: 8px 10px; position: relative; height: 180px; }
+
+    /* ── Trend 카드 내부 (scoped) ── */
+    .trend-body { display: flex; flex-direction: column; flex: 1; overflow: hidden; padding: 6px 10px 4px; min-height: 0; font-family: 'Segoe UI', sans-serif; }
+    .trend-lgrow { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px; margin-bottom: 4px; flex-shrink: 0; }
+    .trend-lg { display: flex; flex-wrap: wrap; gap: 10px; font-size: 12px; color: #1a1a1a; }
+    .trend-lg span { display: inline-flex; align-items: center; gap: 4px; }
+    .trend-lg .sw { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
+    .trend-lg .ln { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
+    .trend-sub { font-size: 12px; color: #1a1a1a; flex-shrink: 0; }
+    .trend-chart-wrap { position: relative; flex: 1; min-height: 0; }
+    .trend-tbl-wrap { flex-shrink: 0; overflow-x: auto; max-height: 90px; overflow-y: auto; }
+    .trend-tbl-wrap table { border-collapse: collapse; width: 100%; table-layout: fixed; white-space: nowrap; }
+    .trend-tbl-wrap thead th { font-size: 12px; font-weight: 600; color: #1a1a1a; text-align: right; padding: 3px 8px; border: none; border-bottom: 1px solid #cfcfca; background: #f4f6f9; position: sticky; top: 0; }
+    .trend-tbl-wrap thead th.lab { text-align: left; }
+    .trend-tbl-wrap tbody tr { background: transparent; }
+    .trend-tbl-wrap tbody td { font-size: 12px; text-align: right; padding: 3px 8px; border: none; background: transparent; font-variant-numeric: tabular-nums; color: #1a1a1a; }
+    .trend-tbl-wrap tbody td.lab { text-align: left; color: #1a1a1a; font-size: 12px; }
+    .trend-tbl-wrap tr.t-sum td { font-weight: 600; }
+    .trend-tbl-wrap tr.group-end td { border-bottom: 1px solid #cfcfca; }
+    .trend-tbl-wrap td.t-pos { color: #a32d2d; }
+    .trend-tbl-wrap td.t-neg { color: #185fa5; }
+    .trend-tbl-wrap td.t-muted { color: #1a1a1a; }
+
+    /* ── Daily 테이블 영역 제한 ── */
+    .daily-table-wrap { max-height: 160px; overflow-y: auto; }
+
+    /* ── MM 테이블 ── */
+    .mm-table-wrap { max-height: 260px; overflow-y: auto; }
+
+    /* ── badge ── */
+    .badge {
+      display: inline-block;
+      padding: 1px 5px;
+      border-radius: 2px;
+      font-size: 9px;
+    }
+    .badge-live { background: #e6f4ea; color: #1a6a30; border: 1px solid #4caf50; }
+    .badge-warn { background: #fff3cd; color: #856404; border: 1px solid #ffc107; }
+  </style>
+</head>
+<body>
+
+<div class="db-header">
+  <h1>GlobalMM &nbsp;Monitoring Dashboard</h1>
+  <div class="meta">
+    <span class="time" id="clock"></span>
+    &nbsp;&nbsp;<span class="badge-live badge">LIVE</span>
+  </div>
+</div>
+
+<div class="db-body">
+
+  <!-- ── 상단 3분할 ── -->
+  <div class="top-row">
+
+    <!-- [1] PnL Report (from PnL_Report_20260625.html) -->
+    <div class="card">
+      <div class="card-header">Daily P&amp;L Report</div>
+      <div class="pnl-report">
+
+        <table>
+          <colgroup>
+            <col class="c-cat"><col class="c-sub">
+            <col class="c-num"><col class="c-num"><col class="c-num">
+          </colgroup>
+          <tr>
+            <td>항목</td>
+            <td></td>
+            <td>당일</td>
+            <td>당월</td>
+            <td>누적</td>
+          </tr>
+          <tr>
+            <td>합계</td><td>시장</td>
+            <td class="num">5,874</td><td class="num">6,581</td><td class="num">5,089</td>
+          </tr>
+          <tr>
+            <td></td><td>괴리</td>
+            <td class="num">4,444</td><td class="num neg-val">-4,127</td><td class="num neg-val">-12,132</td>
+          </tr>
+          <tr>
+            <td></td><td>자금</td>
+            <td class="num">121</td><td class="num">2,121</td><td class="num">5,128</td>
+          </tr>
+          <tr>
+            <td></td>
+            <td style="font-weight:bold">이론</td>
+            <td class="num" style="font-weight:bold">1,310</td>
+            <td class="num" style="font-weight:bold">8,587</td>
+            <td class="num" style="font-weight:bold">12,092</td>
+          </tr>
+          <tr>
+            <td>주식파생</td><td>시장</td>
+            <td class="num">841</td><td class="num">467</td><td class="num">346</td>
+          </tr>
+          <tr>
+            <td></td><td>괴리</td>
+            <td class="num">844</td><td class="num">46</td><td class="num neg-val">-30</td>
+          </tr>
+          <tr>
+            <td></td><td>자금</td>
+            <td class="num">6</td><td class="num">142</td><td class="num">703</td>
+          </tr>
+          <tr>
+            <td></td>
+            <td style="font-weight:bold">이론</td>
+            <td class="num neg-val" style="font-weight:bold">-9</td>
+            <td class="num" style="font-weight:bold">279</td>
+            <td class="num neg-val" style="font-weight:bold">-327</td>
+          </tr>
+          <tr>
+            <td>지수파생</td><td>시장</td>
+            <td class="num">370</td><td class="num">304</td><td class="num">771</td>
+          </tr>
+          <tr>
+            <td></td><td>괴리</td>
+            <td class="num">100</td><td class="num neg-val">-150</td><td class="num neg-val">-200</td>
+          </tr>
+          <tr>
+            <td></td><td>자금</td>
+            <td class="num">4</td><td class="num">79</td><td class="num">644</td>
+          </tr>
+          <tr>
+            <td></td>
+            <td style="font-weight:bold">이론</td>
+            <td class="num" style="font-weight:bold">266</td>
+            <td class="num" style="font-weight:bold">375</td>
+            <td class="num" style="font-weight:bold">327</td>
+          </tr>
+          <tr>
+            <td>주식차익</td><td>시장</td>
+            <td class="num">4,663</td><td class="num">4,974</td><td class="num">2,247</td>
+          </tr>
+          <tr>
+            <td></td><td>괴리</td>
+            <td class="num">3,500</td><td class="num neg-val">-4,023</td><td class="num neg-val">-11,902</td>
+          </tr>
+          <tr>
+            <td></td><td>자금</td>
+            <td class="num">110</td><td class="num">1,784</td><td class="num">3,594</td>
+          </tr>
+          <tr>
+            <td></td>
+            <td style="font-weight:bold">이론</td>
+            <td class="num" style="font-weight:bold">1,053</td>
+            <td class="num" style="font-weight:bold">7,213</td>
+            <td class="num" style="font-weight:bold">10,555</td>
+          </tr>
+          <tr>
+            <td>ELW차익</td><td>시장</td>
+            <td class="num">-</td><td class="num">837</td><td class="num">1,725</td>
+          </tr>
+          <tr>
+            <td></td><td>괴리</td>
+            <td class="num">-</td><td class="num">-</td><td class="num">-</td>
+          </tr>
+          <tr>
+            <td></td><td>자금</td>
+            <td class="num">-</td><td class="num">116</td><td class="num">187</td>
+          </tr>
+          <tr>
+            <td></td>
+            <td style="font-weight:bold">이론</td>
+            <td class="num" style="font-weight:bold">-</td>
+            <td class="num" style="font-weight:bold">721</td>
+            <td class="num" style="font-weight:bold">1,538</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="top-right">
+    <!-- [2] PnL Trend -->
+    <div class="card card-pnl-trend">
+      <div class="card-header">PnL Trend</div>
+      <div class="trend-body">
+        <script>window.PNL_DATA = {"months":["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"],"series":{"합계":[-309,-125,830,180,2929,7866.49,null,null,null,null,null,null]},"tableRows":[{"label":"시장조성","sub":"주식","vals":[-212,-275,-286,51,116,278.64,null,null,null,null,null,null],"ytd":-327.36},{"label":"","sub":"지수","vals":[-180,-59,745,73,-627,374.76,null,null,null,null,null,null],"ytd":326.76},{"label":"차익거래","sub":"주식","vals":[0,0,371,56,2915,6492.09,null,null,null,null,null,null],"ytd":9834.09},{"label":"","sub":"ELW","vals":[83,209,0,0,525,721,null,null,null,null,null,null],"ytd":1538},{"label":"합계","sub":"","vals":[-309,-125,830,180,2929,7866.49,null,null,null,null,null,null],"ytd":11371.49}],"basedate":"2026-06-25","unit":"단위 백만원"};</script>
+        <div class="trend-chart-wrap"><canvas id="pnlChart"></canvas></div>
+        <div class="trend-tbl-wrap"><div id="pnl-tbl"></div></div>
+      </div>
+    </div>
+
+    <!-- [3] Outstanding Trend -->
+    <div class="card card-out-trend">
+      <div class="card-header">Outstanding Trend</div>
+      <div class="trend-body">
+        <script>window.OUT_DATA = {"months":["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"],"rows":["장부금액","평가금액"],"series":{"장부금액":[459.71,1473.76,2457.81,2483.09,7659.1,12796.78,null,null,null,null,null,null],"평가금액":[484.3,1555.79,2154.21,2889.4,10876.8,18753.08,null,null,null,null,null,null]},"ytd":{"장부금액":null,"평가금액":null},"basedate":"2026-06-25","unit":"단위 억"};</script>
+        <div class="trend-chart-wrap"><canvas id="outChart"></canvas></div>
+        <div class="trend-tbl-wrap"><div id="out-tbl"></div></div>
+      </div>
+    </div>
+    </div><!-- /top-right -->
+
+  </div><!-- /top-row -->
+
+  <!-- ── 하단: MM 종목별 ── -->
+  <div class="bottom-row">
+    <div class="card">
+      <div class="card-header">MM 종목별 현황</div>
+      <div class="card-body">
+        <div class="scroll-x mm-table-wrap">
+          <table id="mm-table">
+            <thead>
+              <tr>
+                <th>Type</th><th>종목코드</th><th>종목명</th>
+                <th>현재가</th><th>등락(%)</th>
+                <th>거래량(Lots)</th><th>거래대금(Mil)</th>
+                <th>MTM PnL</th><th>THEO PnL</th>
+              </tr>
+            </thead>
+            <tbody id="mm-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /db-body -->
+
+<script>
+/* ── 시계 ── */
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent =
+    now.toLocaleDateString('ko-KR') + ' ' +
+    now.toLocaleTimeString('ko-KR', {hour12: false});
+}
+updateClock();
+setInterval(updateClock, 1000);
+
+/* ── 공통 유틸 ── */
+const pnlMonths = ['25.Jul','25.Aug','25.Sep','25.Oct','25.Nov','25.Dec',
+                   '26.Jan','26.Feb','26.Mar','26.Apr','26.May','26.Jun'];
+function fmt(v) { return (v >= 0 ? '+' : '') + v.toLocaleString(); }
+function cls(v) { return v > 0 ? 'pos' : v < 0 ? 'neg' : 'zero'; }
+
+/* ── Outstanding Trend 샘플 데이터 ── */
+const outData   = [42100, 43800, 40200, 44500, 46200, 45000,
+                   47300, 44100, 48600, 51200, 49800, 46724];
+const outCounts = [28, 29, 27, 30, 30, 29, 31, 28, 30, 32, 31, 30];
+
+/* ── MM 테이블 ── */
+const mmData = [
+  ['GT','000150','두산',1596000,'1.53%',1191,8379.73,214379500,2038844],
+  ['FF','326030','SK바이오팜',99900,'-1.87%',165,165.559,243000,211475],
+  ['B2','010950','S-Oil',134500,'0.15%',1469,1978.073,-1911750,1031975],
+  ['1S','298040','효성중공업',3912000,'-1.76%',354,14040.62,-2150000,-223628],
+  ['CC','086280','현대글로비스',227000,'-4.82%',410,945.05,1366000,124013],
+  ['DY','017800','현대엘리베이터',98700,'-0.3%',673,664.985,435400,-37364],
+  ['0K','003230','삼양식품',1341000,'2.05%',275,3707.41,-15260000,2530195],
+  ['C3','011780','금호석유화학',146600,'-2.4%',128,185.145,420900,182927],
+  ['C0','010060','OCI홀딩스',368000,'-0.94%',514,1899.945,-770000,-27664],
+  ['BQ','008770','호텔신라',65500,'-3.25%',2708,1770.447,-89950,961091],
+  ['HP','084370','유진테크',130000,'-7.14%',580,750.014,923900,411199],
+  ['B3','010130','고려아연',1579000,'-1.56%',327,5106.76,31016000,7737122],
+  ['1M','183300','코미코',141600,'-0.56%',293,425.61,-176300,-13414],
+  ['GP','073240','금호타이어',5820,'-4.28%',1902,111.15,-21500,-21500],
+  ['0R','001800','오리온홀딩스',25850,'2.17%',856,220.33,-178475,-299121],
+  ['FA','011200','HMM',20500,'-1.2%',839,170.913,605650,709223],
+  ['CN','022100','포스코DX',34900,'-3.99%',2371,826.19,-4530100,-2426149],
+  ['CT','000810','삼성화재',461000,'-0.65%',109,506.175,-570000,342442],
+];
+const mmTbody = document.getElementById('mm-tbody');
+mmData.forEach(r => {
+  const pnlCls = r[7] > 0 ? 'pos' : r[7] < 0 ? 'neg' : 'zero';
+  const theoCls = r[8] > 0 ? 'pos' : r[8] < 0 ? 'neg' : 'zero';
+  const chgCls = r[4].startsWith('-') ? 'neg' : 'pos';
+  mmTbody.innerHTML += `<tr>
+    <td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td>
+    <td>${r[3].toLocaleString()}</td>
+    <td class="${chgCls}">${r[4]}</td>
+    <td>${r[5].toLocaleString()}</td>
+    <td>${r[6].toLocaleString()}</td>
+    <td class="${pnlCls}">${r[7].toLocaleString()}</td>
+    <td class="${theoCls}">${r[8].toLocaleString()}</td>
+  </tr>`;
+});
+// 합계행
+mmTbody.innerHTML += `<tr class="total-row">
+  <td></td><td>합계</td><td></td><td></td><td></td><td></td>
+  <td>46,724</td>
+  <td class="pos">215,193,015</td>
+  <td class="pos">16,379,967</td>
+</tr>`;
+
+/* ── PnL Trend 차트 & 테이블 ── */
+(function(){
+  var D = window.PNL_DATA;
+  var POS='#a32d2d', NEG='#185fa5', MUTED='#5f5e5a';
+  var SUM_CLR='#E0A82E';
+  function fmt(v){ if(v==null) return ''; var r=Math.round(v); return r<0 ? '- '+Math.abs(r).toLocaleString() : r.toLocaleString(); }
+
+  /* cumsum */
+  function cumsum(arr){ var s=0,out=[]; arr.forEach(function(v){ if(v==null){out.push(null);}else{s+=v;out.push(Math.round(s*100)/100);} }); return out; }
+  var cum = cumsum(D.series['합계']);
+  var _L=cum.filter(function(v){return v!=null;});
+  var Lmax=Math.max.apply(null,[0].concat(_L))*1.12, Lmin=Math.min.apply(null,[0].concat(_L))*1.12;
+
+  var pnlChartInst = new Chart(document.getElementById('pnlChart'), {
+    data: { labels: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'], datasets: [
+      { type:'line', label:'누적손익', data:cum,
+        borderColor:SUM_CLR, backgroundColor:'rgba(224,168,46,0.12)',
+        borderWidth:2.5, pointRadius:3, fill:true, tension:0.3 }
+    ]},
+    options: { responsive:true, maintainAspectRatio:false,
+      plugins: { legend:{display:false},
+        tooltip:{ mode:'index', intersect:false,
+          callbacks:{ label:function(c){ return c.dataset.label+': '+(c.parsed.y==null?'–':Math.round(c.parsed.y).toLocaleString()); } } } },
+      scales: {
+        x: { ticks:{font:{size:9},color:MUTED}, grid:{color:'rgba(0,0,0,0.05)'} },
+        y: { display:false, min:Lmin, max:Lmax }
+      } }
+  });
+
+  /* table */
+  var ENG_MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  var rows = D.tableRows || [];
+  var thM = ENG_MONTHS.map(function(m){return '<th style="text-align:center">'+m+'</th>';}).join('');
+  var body = '';
+  rows.forEach(function(r, i){
+    var isSum=(r.label==='합계');
+    var nextR = rows[i+1];
+    var isGroupStart = r.sub && r.label !== '' && nextR && nextR.label === '' && nextR.sub;
+    var isGroupCont  = r.sub && r.label === '';
+    var LS = 'class="lab" style="color:#1a1a1a;text-align:center"';
+    var labelCell;
+    var LSm = 'class="lab" style="color:#1a1a1a;text-align:center;vertical-align:middle;border-bottom:1px solid #cfcfca"';
+    if (isGroupStart) {
+      labelCell = '<td '+LSm+' rowspan="2">'+r.label+'</td><td '+LS+'>'+r.sub+'</td>';
+    } else if (isGroupCont) {
+      labelCell = '<td '+LS+'>'+r.sub+'</td>';
+    } else if (r.sub) {
+      labelCell = '<td '+LS+'>'+r.label+'</td><td '+LS+'>'+r.sub+'</td>';
+    } else {
+      labelCell = '<td '+LS+' colspan="2">'+(isSum?'손익':r.label)+'</td>';
+    }
+    var cells = (r.vals||[]).map(function(v){
+      var s = v==null?'':v>0?'color:#1a1a1a':v<0?'color:#c8000a':'';
+      return '<td'+(s?' style="'+s+'"':'')+'>'+fmt(v)+'</td>';
+    }).join('');
+    var ytdS = r.ytd==null?'':(r.ytd>0?'color:#1a1a1a':'color:#c8000a');
+    var cls = isSum ? 't-sum' : (isGroupCont ? 'group-end' : '');
+    body += '<tr class="'+cls+'">'+labelCell+cells+'<td'+(ytdS?' style="'+ytdS+'"':'')+'>'+fmt(r.ytd)+'</td></tr>';
+  });
+  document.getElementById('pnl-tbl').innerHTML =
+    '<table style="table-layout:fixed;width:100%"><thead><tr><th class="lab" colspan="2"></th>'+thM+'<th style="text-align:center">YTD</th></tr></thead><tbody>'+body+'</tbody></table>';
+})();
+
+/* ── Outstanding Trend 차트 & 테이블 ── */
+(function(){
+  var D = window.OUT_DATA;
+  var MUTED='#5f5e5a';
+  var C = {'장부금액':'#0C447C','평가금액':'#1D9E75'};
+  function fmt(v){ return (v==null)?'':Math.round(v).toLocaleString(); }
+
+  var ds = D.rows.map(function(n){
+    return { type:'bar', label:n, data:D.series[n], backgroundColor:C[n]||'#888',
+             borderRadius:2, categoryPercentage:0.7, barPercentage:0.9, maxBarThickness:36 };
+  });
+  new Chart(document.getElementById('outChart'), {
+    data: { labels:D.months, datasets:ds },
+    options: { responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false},
+        tooltip:{ mode:'index', intersect:false,
+          callbacks:{ label:function(c){ return c.dataset.label+': '+(c.parsed.y==null?'–':Math.round(c.parsed.y).toLocaleString()); } } } },
+      scales:{
+        x:{ ticks:{font:{size:9},color:MUTED}, grid:{display:false} },
+        y:{ display:false }
+      } }
+  });
+
+  /* table */
+  var thM = D.months.map(function(m){return '<th style="text-align:center">'+m+'</th>';}).join('');
+  var body = D.rows.map(function(n){
+    var cells = (D.series[n]||[]).map(function(v){ return '<td style="font-size:12px;text-align:center;color:#1a1a1a;font-variant-numeric:tabular-nums">'+fmt(v)+'</td>'; }).join('');
+    return '<tr><td class="lab" style="font-size:12px;color:'+(C[n]||MUTED)+';text-align:center">'+n+'</td>'+cells+'<td></td></tr>';
+  }).join('');
+  document.getElementById('out-tbl').innerHTML =
+    '<table style="table-layout:fixed;width:100%;font-family:\'Segoe UI\',sans-serif"><thead><tr><th class="lab" style="text-align:center"></th>'+thM+'<th></th></tr></thead><tbody>'+body+'</tbody></table>';
+})();
+</script>
+</body>
+</html>
