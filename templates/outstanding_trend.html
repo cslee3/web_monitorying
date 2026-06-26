@@ -33,7 +33,7 @@
 </style>
 </head>
 <body>
-<script>window.OUT_DATA = {"months": ["1월", "2월", "3월", "4월", "5월", "6월", "7월", "8월", "9월", "10월", "11월", "12월"], "rows": ["장부금액", "평가금액"], "series": {"장부금액": [459.71, 1473.76, 2457.81, 2483.09, 7659.1, 10629.47, null, null, null, null, null, null], "평가금액": [484.3, 1555.79, 2154.21, 2889.4, 10876.8, 15845.56, null, null, null, null, null, null]}, "ytd": {"장부금액": null, "평가금액": null}, "basedate": "2026-06-19", "unit": "단위 백만원"};</script>
+<script>window.OUT_DATA = {"months": ["1월", "2월", "3월", "4월", "5월", "6월", "7월", "8월", "9월", "10월", "11월", "12월"], "rows": ["장부금액", "평가금액"], "series": {"장부금액": [459.71, 1473.76, 2457.81, 2483.09, 7659.1, 10629.47, null, null, null, null, null, null], "평가금액": [484.3, 1555.79, 2154.21, 2889.4, 10876.8, 15845.56, null, null, null, null, null, null]}, "ytd": {"장부금액": null, "평가금액": null}, "basedate": "2026-06-19", "unit": "단위 억"};</script>
 <div class="lgrow">
   <div class="lg" id="legend"></div>
   <span class="s" id="sub"></span>
@@ -58,11 +58,18 @@
   });
   lg.innerHTML = html;
 
+  // 평가금액의 가장 최근월(마지막 non-null) 인덱스 — AL43 실시간 갱신 대상
+  var EVAL='평가금액', evalArr=D.series[EVAL]||[], latestIdx=-1;
+  for(var _i=evalArr.length-1;_i>=0;_i--){ if(evalArr[_i]!=null){ latestIdx=_i; break; } }
+
   var colg = '<colgroup><col style="width:88px">' + D.months.map(function(){ return '<col>'; }).join('') + '<col style="width:64px"></colgroup>';
   var thM = D.months.map(function(m){ return '<th>'+m+'</th>'; }).join('');
   var body = D.rows.map(function(n){
     var arr = D.series[n] || [];
-    var cells = arr.map(function(v){ return '<td>'+fmt(v)+'</td>'; }).join('');
+    var cells = arr.map(function(v,i){
+      var idAttr = (n===EVAL && i===latestIdx) ? ' id="evalCell"' : '';
+      return '<td'+idAttr+'>'+fmt(v)+'</td>';
+    }).join('');
     return '<tr><td class="lab" style="color:'+(C[n]||MUTED)+';font-weight:600">'+n+'</td>'+cells+'<td></td></tr>';
   }).join('');
   document.getElementById('outtbl').innerHTML =
@@ -96,6 +103,24 @@
             ticks:{ color:MUTED, font:{size:12}, callback:function(v){ return Math.round(v).toLocaleString(); } } }
       } }
   });
+
+  // ── AL43(최근월 평가금액) — SSF MM 스트림에 얹어 실시간 갱신 ──
+  var _lastEval;
+  function applyEval(v){
+    if(v===null || v===undefined || latestIdx<0 || v===_lastEval) return;
+    _lastEval = v;
+    var di = D.rows.indexOf(EVAL);
+    if(di>=0 && _chart.data.datasets[di]){ _chart.data.datasets[di].data[latestIdx] = v; _chart.update('none'); }
+    var cell = document.getElementById('evalCell');
+    if(cell) cell.textContent = fmt(v);
+  }
+  fetch('/api/dashboard').then(function(r){ return r.ok?r.json():null; })
+    .then(function(d){ if(d && d.header) applyEval(d.header.eval_latest); }).catch(function(){});
+  try{
+    var _es = new EventSource('/api/stream');
+    _es.onmessage = function(e){ try{ var d=JSON.parse(e.data); if(d && d.header) applyEval(d.header.eval_latest); }catch(_e){} };
+  }catch(_e){}
+
   function _syncMonths(){
     var ca=_chart.chartArea, cg=document.querySelector('#outtbl colgroup'), tbl=document.querySelector('#outtbl table');
     if(!ca || !cg || !cg.children.length || !tbl) return;

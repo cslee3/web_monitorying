@@ -36,3 +36,7 @@ banyoung_*.zip
 # 런타임 로그
 *.log
 log/
+
+# 일회성 델타 번들
+update_al43/
+update_al43.zip

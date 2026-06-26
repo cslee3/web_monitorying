@@ -27,7 +27,8 @@ ROW_LABELS  = ["주식파생", "지수파생", "차익거래", "합계", "장부
 PNL_ROWS    = ["주식파생", "지수파생", "차익거래", "합계"]   # 손익(좌축)
 NOTIONAL    = "장부금액"                # 자산(우축)
 MONTHS      = 12
-UNIT_LABEL  = "단위 백만원"
+UNIT_LABEL  = "단위 백만원"             # PnL Trend
+OUT_UNIT_LABEL = "단위 억"              # Outstanding Trend (숫자는 억 단위로 맞춰둠)
 SHOW_BASEDATE = True                    # 헤더에 기준일(C2) 표기 여부
 
 BASE_DIR    = os.path.dirname(os.path.abspath(__file__))
@@ -218,7 +219,7 @@ def _render_outstanding(data, ytd, basedate):
         "series":   {k: data[k] for k in OUT_LABELS},
         "ytd":      {k: ytd[k] for k in OUT_LABELS},
         "basedate": basedate,
-        "unit":     UNIT_LABEL,
+        "unit":     OUT_UNIT_LABEL,
     }
     data_json = json.dumps(payload, ensure_ascii=False)
     return _HTML_HEAD + f"<script>window.OUT_DATA = {data_json};</script>\n" + _OUT_BODY
@@ -605,11 +606,18 @@ _OUT_BODY = """<div class="lgrow">
   });
   lg.innerHTML = html;
 
+  // 평가금액의 가장 최근월(마지막 non-null) 인덱스 — AL43 실시간 갱신 대상
+  var EVAL='평가금액', evalArr=D.series[EVAL]||[], latestIdx=-1;
+  for(var _i=evalArr.length-1;_i>=0;_i--){ if(evalArr[_i]!=null){ latestIdx=_i; break; } }
+
   var colg = '<colgroup><col style="width:88px">' + D.months.map(function(){ return '<col>'; }).join('') + '<col style="width:64px"></colgroup>';
   var thM = D.months.map(function(m){ return '<th>'+m+'</th>'; }).join('');
   var body = D.rows.map(function(n){
     var arr = D.series[n] || [];
-    var cells = arr.map(function(v){ return '<td>'+fmt(v)+'</td>'; }).join('');
+    var cells = arr.map(function(v,i){
+      var idAttr = (n===EVAL && i===latestIdx) ? ' id="evalCell"' : '';
+      return '<td'+idAttr+'>'+fmt(v)+'</td>';
+    }).join('');
     return '<tr><td class="lab" style="color:'+(C[n]||MUTED)+';font-weight:600">'+n+'</td>'+cells+'<td></td></tr>';
   }).join('');
   document.getElementById('outtbl').innerHTML =
@@ -643,6 +651,24 @@ _OUT_BODY = """<div class="lgrow">
             ticks:{ color:MUTED, font:{size:12}, callback:function(v){ return Math.round(v).toLocaleString(); } } }
       } }
   });
+
+  // ── AL43(최근월 평가금액) — SSF MM 스트림에 얹어 실시간 갱신 ──
+  var _lastEval;
+  function applyEval(v){
+    if(v===null || v===undefined || latestIdx<0 || v===_lastEval) return;
+    _lastEval = v;
+    var di = D.rows.indexOf(EVAL);
+    if(di>=0 && _chart.data.datasets[di]){ _chart.data.datasets[di].data[latestIdx] = v; _chart.update('none'); }
+    var cell = document.getElementById('evalCell');
+    if(cell) cell.textContent = fmt(v);
+  }
+  fetch('/api/dashboard').then(function(r){ return r.ok?r.json():null; })
+    .then(function(d){ if(d && d.header) applyEval(d.header.eval_latest); }).catch(function(){});
+  try{
+    var _es = new EventSource('/api/stream');
+    _es.onmessage = function(e){ try{ var d=JSON.parse(e.data); if(d && d.header) applyEval(d.header.eval_latest); }catch(_e){} };
+  }catch(_e){}
+
   function _syncMonths(){
     var ca=_chart.chartArea, cg=document.querySelector('#outtbl colgroup'), tbl=document.querySelector('#outtbl table');
     if(!ca || !cg || !cg.children.length || !tbl) return;

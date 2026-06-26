@@ -660,6 +660,12 @@ class DashboardMonitor:
         # B2:AL44 단일 COM 호출 — 헤더·MM·IDX 전 영역 커버
         bulk = ws.Range("B2:AL44").Value
 
+        # AL43 = 최근월 평가금액(장중 실시간 갱신) → Outstanding Trend로 전달 (행43→idx41, AL열→idx36)
+        _al43 = bulk[41][36] if len(bulk) > 41 and len(bulk[41]) > 36 else None
+        eval_latest = (round(float(_al43), 2)
+                       if isinstance(_al43, (int, float)) and not isinstance(_al43, bool)
+                       else None)
+
         header = {
             "base_date": _date(bulk[0][1]),   # C2
             "ytd":       _date(bulk[1][1]),   # C3
@@ -668,6 +674,7 @@ class DashboardMonitor:
             "exp2":      _date(bulk[1][7]),   # I3
             "u2": _raw(bulk[0][19]), "v2": _raw(bulk[0][20]),  # U2, V2
             "u3": _raw(bulk[1][19]), "v3": _raw(bulk[1][20]),  # U3, V3
+            "eval_latest": eval_latest,       # AL43 — Outstanding 최근월 평가금액(실시간)
         }
 
         mm_sections  = _read_mm(bulk)
