@@ -12,7 +12,6 @@ __pycache__/
 ssf_snapshot.html
 ssf_idx_snapshot.html
 sso_snapshot.html
-archive/
 
 # 오프라인 설치용 wheel 패키지
 wheels/
