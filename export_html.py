@@ -37,7 +37,7 @@ CHART_JS    = "chart.umd.js"            # BASE_DIR 에 위치, /chart.umd.js 로
 
 # Daily Report (옛 보고서): PnL 시트 셀을 스타일 보존 덤프 → archive/PnL_Report_<날짜>.html
 DAILY_SHEET = "PnL"
-DAILY_RANGE = "W3:AA24"
+DAILY_RANGE = "W3:AA29"
 ARCHIVE_DIR = os.path.join(BASE_DIR, "archive")
 
 # Outstanding Trend: Report 탭의 장부금액·평가금액 월별 → templates/outstanding_trend.html
@@ -340,7 +340,7 @@ def _export_daily_report(wb, basedate):
 
     html_rows = []
     for r in range(1, rows_count + 1):
-        if r in [1, 2, 4, 5, 6]:   # 1행(제목)·2행(Report 줄) + 4~6 빈행 제외
+        if r in [1, 4, 5, 6, 7]:   # 1행(제목)·2행(Report 줄) + 4~6 빈행 제외
             continue
         # 요약 3줄 제외: 1열=주식/지수/차익파생 이고 2열(시장/괴리/자금/이론 라벨) 비어있는 행
         try:
