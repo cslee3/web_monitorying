@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>POE1 Curncy Arb Trading</title>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#171a21; --panel2:#1e222b; --border:#2a2f3a;
+    --text:#e8e9ec; --muted:#8b93a3; --accent:#c8aa6e;
+    --pos:#3ecf8e; --pos-bg:rgba(62,207,142,0.12);
+    --neg:#f36a6a; --neg-bg:rgba(243,106,106,0.12);
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:"Segoe UI","Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+    font-size:14px;
+  }
+  header{
+    padding:18px 20px; border-bottom:1px solid var(--border);
+    display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;
+  }
+  header h1{font-size:18px; margin:0; color:var(--accent); font-weight:600;}
+  header .sub{color:var(--muted); font-size:12px; margin-top:4px;}
+  .status-bar{
+    display:flex; align-items:center; gap:14px; flex-wrap:wrap; font-size:12px; color:var(--muted);
+  }
+  select, button, input[type="number"]{
+    background:var(--panel2); color:var(--text); border:1px solid var(--border);
+    border-radius:6px; padding:6px 10px; font-size:13px; cursor:pointer;
+  }
+  input[type="number"]{width:90px; cursor:text;}
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button{
+    -webkit-appearance: none; margin:0;
+  }
+  input[type="number"]{-moz-appearance: textfield; appearance: textfield;}
+  button#refreshBtn{color:var(--accent); border-color:#4a4330;}
+  button#refreshBtn:hover{background:#262b36;}
+  main{padding:18px 20px; max-width:1180px; margin:0 auto;}
+  section{margin-bottom:28px;}
+  section h2{font-size:14px; color:var(--text); margin:0 0 10px 0; display:flex; align-items:center; gap:8px;}
+  section h2 .count{color:var(--muted); font-weight:400; font-size:12px;}
+  .note{color:var(--muted); font-size:12px; margin:-4px 0 10px 0; line-height:1.5;}
+  .card{background:var(--panel); border:1px solid var(--border); border-radius:10px; overflow-x:auto;}
+  table{width:100%; border-collapse:collapse; font-size:13px;}
+  thead th{
+    text-align:right; padding:9px 12px; color:var(--muted); font-weight:500;
+    border-bottom:1px solid var(--border); white-space:nowrap; position:sticky; top:0; background:var(--panel);
+  }
+  thead th:first-child, thead th.left{text-align:left;}
+  tbody td{padding:8px 12px; border-bottom:1px solid var(--border); text-align:right; white-space:nowrap;}
+  tbody td:first-child, tbody td.left{text-align:left; white-space:normal;}
+  tbody tr:last-child td{border-bottom:none;}
+  tbody tr:hover{background:var(--panel2);}
+  .path{color:var(--text);}
+  .path .arrow{color:var(--muted); margin:0 4px;}
+  .orb-icon{
+    width:28px; height:28px; object-fit:contain; vertical-align:middle;
+    filter:drop-shadow(0 0 2px rgba(0,0,0,0.6));
+  }
+  .gold{color:#d4af37;}
+  .pct-pos{color:var(--pos); font-weight:600;}
+  .pct-neg{color:var(--neg); font-weight:600;}
+  tr.row-pos{background:var(--pos-bg);}
+  tr.row-neg{background:transparent;}
+  .pill{
+    display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:600;
+  }
+  .pill-pos{background:var(--pos-bg); color:var(--pos);}
+  .pill-neg{background:var(--neg-bg); color:var(--neg);}
+  #errorBox{
+    display:none; background:var(--neg-bg); color:var(--neg); border:1px solid #5a2a2a;
+    border-radius:8px; padding:10px 14px; margin-bottom:16px; font-size:13px;
+  }
+  .empty{padding:20px; text-align:center; color:var(--muted);}
+  .sort-hint{color:var(--muted); font-size:11px; cursor:help;}
+  th.sortable{cursor:pointer; user-select:none;}
+  th.sortable:hover{color:var(--text);}
+  .dim{color:var(--muted);}
+  footer{padding:20px; text-align:center; color:var(--muted); font-size:11px;}
+  @media (max-width:720px){
+    table{font-size:12px;}
+    thead th, tbody td{padding:7px 8px;}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>POE1 Curncy Arb Trading</h1>
+    <div class="sub" id="leagueLabel">리그 불러오는 중…</div>
+  </div>
+  <div class="status-bar">
+    <select id="hubSelect">
+      <option value="chaos">Chaos Orb</option>
+      <option value="divine">Divine Orb</option>
+    </select>
+    <input type="number" id="qtyInput" value="1" min="1" step="1" title="구매에 사용할 금액 (선택한 화폐 기준)">
+    <span id="updatedAt">업데이트 대기 중</span>
+    <span id="countdown"></span>
+    <button id="refreshBtn">↻ Refresh</button>
+  </div>
+</header>
+
+<main>
+  <div id="errorBox"></div>
+
+  <section>
+    <h2>NPC Arb Trading <span class="count">Buy in Exchange -> Vendor -> Sell in Exchange</span></h2>
+    <div class="card">
+      <table>
+        <thead>
+          <tr>
+            <th class="left">Vendor</th>
+            <th>Buy Quantity</th>
+            <th>Gold</th>
+            <th>Sell Quantity</th>
+            <th>Gold</th>
+            <th>Profit</th>
+            <th>Total Gold</th>
+            <th class="sortable" id="sortDirect">Ratio ▾</th>
+            <th>Return/100k</th>
+          </tr>
+        </thead>
+        <tbody id="directBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>다단계 상점 체인 <span class="count" id="chainCount"></span></h2>
+    <p class="note">중간 단계는 시장 거래 없이 상점 교환만 연속으로 수행하는 경로입니다. 예: 쥬얼러 오브 → 연결의 오브 → 정제의 오브.</p>
+    <div class="card">
+      <table>
+        <thead>
+          <tr>
+            <th class="left">경로</th>
+            <th>매수수량(시작)</th>
+            <th>매도수량(도착)</th>
+            <th>손익</th>
+            <th class="sortable" id="sortChain">수익률 ▾</th>
+          </tr>
+        </thead>
+        <tbody id="chainBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>화폐별 시세 <span class="count" id="priceCount"></span></h2>
+    <p class="note">입력한 예산으로 살 수 있는 수량 기준 (ask=bid 동일 — poe.ninja 데이터 특성상 매수/매도 스프레드 미제공).</p>
+    <div class="card">
+      <table>
+        <thead>
+          <tr>
+            <th class="left">화폐</th>
+            <th>매수수량(ask)</th>
+            <th>매도수량(bid)</th>
+            <th>카오스 환산</th>
+            <th>Divine Orb 환산</th>
+          </tr>
+        </thead>
+        <tbody id="priceBody"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<footer>가격 출처: poe.ninja (Currency Exchange) · 로컬 프록시 서버를 통해 1분마다 자동 갱신</footer>
+
+<script>
+const KOREAN_NAME = {
+  chaos: "Chaos Orb",
+  divine: "Divine Orb",
+  wisdom: "감정 주문서",
+  portal: "포탈 주문서",
+  transmute: "진화의 오브",
+  aug: "확장의 오브",
+  alt: "변화의 오브",
+  jewellers: "쥬얼러 오브",
+  fusing: "연결의 오브",
+  scour: "정제의 오브",
+  regret: "후회의 오브",
+  alch: "연금술의 오브",
+  "orb-of-unmaking": "해제의 오브",
+};
+
+// 거래소에서 품목 1개 매수/매도 시 드는 골드 비용
+const GOLD_COST = {
+  chaos: 15, fusing: 15, alch: 15, scour: 15,
+  divine: 250,
+  portal: 1, wisdom: 1,
+  transmute: 3,
+  aug: 5,
+  jewellers: 10, alt: 10,
+  regret: 20, "orb-of-unmaking": 20,
+};
+
+// poe.ninja 아이콘을 로컬에 내려받아 icons/ 폴더에 보관 (외부 CDN 접근 없이도 항상 표시됨)
+const ITEM_IMAGE = {
+  chaos: "icons/chaos.png",
+  divine: "icons/divine.png",
+  wisdom: "icons/wisdom.png",
+  portal: "icons/portal.png",
+  transmute: "icons/transmute.png",
+  aug: "icons/aug.png",
+  alt: "icons/alt.png",
+  jewellers: "icons/jewellers.png",
+  fusing: "icons/fusing.png",
+  scour: "icons/scour.png",
+  regret: "icons/regret.png",
+  alch: "icons/alch.png",
+  "orb-of-unmaking": "icons/orb-of-unmaking.png",
+};
+
+function iconImg(id) {
+  const src = ITEM_IMAGE[id];
+  const name = KOREAN_NAME[id] || id;
+  if (!src) return name; // 아이콘 없는 항목은 이름 텍스트로 대체 표시
+  return `<img class="orb-icon" src="${src}" alt="${name}" title="${name}" loading="lazy">`;
+}
+
+function nameWithIcon(id) {
+  return iconImg(id);
+}
+
+function goldIcon() {
+  return `<img class="orb-icon" src="icons/gold.png" alt="골드" title="골드" loading="lazy">`;
+}
+
+// 상점 교환표 (사용자 제공) : output <- inputs
+const RECIPES = [
+  { out: "portal",            ins: [{ id: "wisdom", qty: 3 }] },
+  { out: "transmute",         ins: [{ id: "aug", qty: 1 }] },
+  { out: "aug",                ins: [{ id: "transmute", qty: 4 }] },
+  { out: "alt",                ins: [{ id: "aug", qty: 4 }] },
+  { out: "jewellers",          ins: [{ id: "alt", qty: 2 }] },
+  { out: "fusing",             ins: [{ id: "jewellers", qty: 4 }] },
+  { out: "scour",              ins: [{ id: "fusing", qty: 4 }] },
+  { out: "regret",             ins: [{ id: "scour", qty: 2 }] },
+  { out: "alch",               ins: [{ id: "regret", qty: 1 }] },
+  { out: "orb-of-unmaking",    ins: [{ id: "regret", qty: 2 }] },
+];
+
+// 체인 탐색용: 입력 1개짜리 변환만 (regal의 2-입력 레시피는 체인에서 제외, 위 표에서 별도 표시)
+const SINGLE_EDGES = RECIPES.filter(r => r.ins.length === 1)
+  .map(r => ({ from: r.ins[0].id, to: r.out, ratio: r.ins[0].qty }));
+
+const ALL_IDS = Array.from(new Set([
+  "chaos", "divine",
+  ...RECIPES.map(r => r.out),
+  ...RECIPES.flatMap(r => r.ins.map(i => i.id)),
+]));
+
+let state = { prices: null, league: null, updatedAt: null, hub: "chaos", qty: 1 };
+let countdownTimer = null;
+let secondsLeft = 60;
+
+function fmt(n) {
+  if (n === null || n === undefined || Number.isNaN(n)) return "–";
+  if (n >= 1000) return n.toLocaleString("ko-KR", { maximumFractionDigits: 0 });
+  if (n >= 100) return n.toFixed(1);
+  if (n >= 1) return n.toFixed(2);
+  return n.toFixed(4);
+}
+
+function pct(n) {
+  if (n === null || n === undefined || Number.isNaN(n)) return "–";
+  const s = (n * 100).toFixed(2) + "%";
+  return (n > 0 ? "+" : "") + s;
+}
+
+// 1개당 순수 환산 가격 (허브 화폐 기준)
+function basePrice(id) {
+  if (!state.prices) return null;
+  const chaosVal = state.prices[id];
+  if (chaosVal === undefined) return null;
+  if (state.hub === "chaos") return chaosVal;
+  const divineChaos = state.prices["divine"];
+  if (!divineChaos) return null;
+  return chaosVal / divineChaos;
+}
+
+function hubName() {
+  return iconImg(state.hub);
+}
+
+// 입력한 수량(state.qty) = 해당 허브 화폐로 입력 재료를 구매하는 데 쓰는 금액(예산).
+// 매수수량 = 그 예산으로 살 수 있는 입력 재료 개수, 매도수량 = 그걸 상점에서 교환했을 때 나오는 결과물 개수.
+function buildDirectRows() {
+  const rows = [];
+  const budget = state.qty;
+  for (const r of RECIPES) {
+    if (r.ins.length !== 1) continue; // 2-입력 레시피는 현재 없음
+    const input = r.ins[0];
+    const inputPrice = basePrice(input.id);
+    const outputPrice = basePrice(r.out);
+    if (inputPrice === null || outputPrice === null || inputPrice === 0 || !budget) continue;
+    const buyQty = budget / inputPrice;
+    const sellQty = buyQty / input.qty;
+    const proceeds = sellQty * outputPrice;
+    const profit = proceeds - budget;
+    const profitPct = profit / budget;
+    if (profitPct <= 0) continue; // 수익률이 +인 것만 표시
+    const buyGold = buyQty * (GOLD_COST[input.id] || 0);
+    const sellGold = sellQty * (GOLD_COST[r.out] || 0);
+    const totalGold = buyGold + sellGold;
+    const profitPer100kGold = totalGold > 0 ? (profit / totalGold) * 100000 : null;
+    const label = `${input.qty} × ${nameWithIcon(input.id)}<span class="arrow">→</span>1 × ${nameWithIcon(r.out)}`;
+    rows.push({ label, buyQty, sellQty, inputId: input.id, outputId: r.out, profit, profitPct, buyGold, sellGold, totalGold, profitPer100kGold });
+  }
+  return rows;
+}
+
+function buildChainRows() {
+  const adj = {};
+  for (const e of SINGLE_EDGES) {
+    (adj[e.from] = adj[e.from] || []).push(e);
+  }
+  const results = [];
+  const nodes = Array.from(new Set(SINGLE_EDGES.flatMap(e => [e.from, e.to])));
+
+  function dfs(start, current, ratio, path, visited) {
+    const outs = adj[current] || [];
+    for (const e of outs) {
+      if (visited.has(e.to)) continue;
+      const newRatio = ratio * e.ratio;
+      const newPath = [...path, e.to];
+      if (newPath.length >= 2) {
+        results.push({ start, end: e.to, ratio: newRatio, path: newPath });
+      }
+      dfs(start, e.to, newRatio, newPath, new Set([...visited, e.to]));
+    }
+  }
+
+  for (const n of nodes) {
+    dfs(n, n, 1, [n], new Set([n]));
+  }
+
+  // 길이 2 이상 (단일 변환은 위 1-홉 표에 이미 있음)
+  // 입력한 수량(state.qty) = 시작 화폐를 구매하는 데 쓸 예산(선택한 허브 화폐 기준)
+  const rows = [];
+  const budget = state.qty;
+  for (const r of results) {
+    if (r.path.length < 3) continue; // path includes start, so length>=3 means >=2 edges
+    const startPrice = basePrice(r.start);
+    const endPrice = basePrice(r.end);
+    if (startPrice === null || endPrice === null || startPrice === 0 || !budget) continue;
+    const buyQty = budget / startPrice;
+    const sellQty = buyQty / r.ratio;
+    const proceeds = sellQty * endPrice;
+    const profit = proceeds - budget;
+    const profitPct = profit / budget;
+    const label = r.path.map(id => nameWithIcon(id)).join('<span class="arrow">→</span>');
+    rows.push({ label, buyQty, sellQty, startId: r.start, endId: r.end, profit, profitPct });
+  }
+  return rows;
+}
+
+function renderPct(v) {
+  const cls = v > 0 ? "pct-pos" : (v < 0 ? "pct-neg" : "");
+  return `<span class="${cls}">${pct(v)}</span>`;
+}
+
+function renderDirectRows(rows, sortState, emptyMessage) {
+  const tbody = document.getElementById("directBody");
+  if (!rows.length) {
+    const msg = state.prices ? (emptyMessage || "표시할 항목이 없습니다.") : "가격 데이터를 기다리는 중…";
+    tbody.innerHTML = `<tr><td colspan="9" class="empty">${msg}</td></tr>`;
+    return;
+  }
+  const sorted = [...rows].sort((a, b) =>
+    sortState.dir === "desc" ? b.profitPct - a.profitPct : a.profitPct - b.profitPct
+  );
+  tbody.innerHTML = sorted.map(r => `
+    <tr class="${r.profitPct > 0 ? "row-pos" : ""}">
+      <td class="left path">${r.label}</td>
+      <td>${fmt(r.buyQty)} ${iconImg(r.inputId)}</td>
+      <td class="gold">${fmt(r.buyGold)} ${goldIcon()}</td>
+      <td>${fmt(r.sellQty)} ${iconImg(r.outputId)}</td>
+      <td class="gold">${fmt(r.sellGold)} ${goldIcon()}</td>
+      <td>${r.profit >= 0 ? "+" : ""}${fmt(r.profit)} ${hubName()}</td>
+      <td class="gold">${fmt(r.totalGold)} ${goldIcon()}</td>
+      <td>${renderPct(r.profitPct)}</td>
+      <td>${r.profitPer100kGold !== null ? (r.profitPer100kGold >= 0 ? "+" : "") + fmt(r.profitPer100kGold) + " " + hubName() : "–"}</td>
+    </tr>
+  `).join("");
+}
+
+function renderChainRows(rows, sortState, emptyMessage) {
+  const tbody = document.getElementById("chainBody");
+  if (!rows.length) {
+    const msg = state.prices ? (emptyMessage || "표시할 항목이 없습니다.") : "가격 데이터를 기다리는 중…";
+    tbody.innerHTML = `<tr><td colspan="5" class="empty">${msg}</td></tr>`;
+    return;
+  }
+  const sorted = [...rows].sort((a, b) =>
+    sortState.dir === "desc" ? b.profitPct - a.profitPct : a.profitPct - b.profitPct
+  );
+  tbody.innerHTML = sorted.map(r => `
+    <tr class="${r.profitPct > 0 ? "row-pos" : ""}">
+      <td class="left path">${r.label}</td>
+      <td>${fmt(r.buyQty)} ${iconImg(r.startId)}</td>
+      <td>${fmt(r.sellQty)} ${iconImg(r.endId)}</td>
+      <td>${r.profit >= 0 ? "+" : ""}${fmt(r.profit)} ${hubName()}</td>
+      <td>${renderPct(r.profitPct)}</td>
+    </tr>
+  `).join("");
+}
+
+function renderPriceTable() {
+  const tbody = document.getElementById("priceBody");
+  if (!state.prices) {
+    tbody.innerHTML = `<tr><td colspan="5" class="empty">가격 데이터를 기다리는 중…</td></tr>`;
+    return;
+  }
+  const divineChaos = state.prices["divine"] || null;
+  const budget = state.qty;
+  const rows = ALL_IDS
+    .filter(id => state.prices[id] !== undefined)
+    .map(id => {
+      const chaosVal = state.prices[id];
+      const divineVal = divineChaos ? chaosVal / divineChaos : null;
+      return { id, chaosVal, divineVal };
+    })
+    .sort((a, b) => b.chaosVal - a.chaosVal);
+
+  document.getElementById("priceCount").textContent = `(${rows.length}종)`;
+
+  tbody.innerHTML = rows.map(r => {
+    const unitPrice = basePrice(r.id); // 선택한 허브 화폐 기준 1개당 가격
+    const buyQty = unitPrice ? budget / unitPrice : null; // 예산으로 살 수 있는 수량
+    return `
+    <tr>
+      <td class="left">${nameWithIcon(r.id)}</td>
+      <td>${buyQty !== null ? fmt(buyQty) : "–"} ${iconImg(r.id)}</td>
+      <td>${buyQty !== null ? fmt(buyQty) : "–"} ${iconImg(r.id)}</td>
+      <td>${fmt(r.chaosVal)}</td>
+      <td>${r.divineVal !== null ? fmt(r.divineVal) : "–"}</td>
+    </tr>
+  `;
+  }).join("");
+}
+
+const sortDirectState = { dir: "desc" };
+const sortChainState = { dir: "desc" };
+
+function renderAll() {
+  const directRows = buildDirectRows();
+  const chainRows = buildChainRows();
+  document.getElementById("chainCount").textContent = `(${chainRows.length}개 경로)`;
+  renderDirectRows(directRows, sortDirectState, "현재 수익률이 양(+)인 상점 교환이 없습니다.");
+  renderChainRows(chainRows, sortChainState);
+  renderPriceTable();
+}
+
+function showError(msg) {
+  const box = document.getElementById("errorBox");
+  box.textContent = msg;
+  box.style.display = "block";
+}
+function clearError() {
+  document.getElementById("errorBox").style.display = "none";
+}
+
+async function fetchPrices() {
+  try {
+    const res = await fetch("/api/prices", { cache: "no-store" });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "알 수 없는 오류");
+    state.prices = data.prices;
+    state.league = data.league;
+    state.updatedAt = data.updatedAt;
+    clearError();
+    document.getElementById("leagueLabel").textContent = `League : ${data.league}`;
+    document.getElementById("updatedAt").textContent = `Last Updated: ${data.updatedAt}`;
+    renderAll();
+  } catch (e) {
+    showError(`가격을 불러오지 못했습니다: ${e.message}. 로컬 서버(server.py)가 실행 중인지 확인하세요.`);
+  }
+  secondsLeft = 60;
+}
+
+function tickCountdown() {
+  secondsLeft -= 1;
+  if (secondsLeft <= 0) {
+    fetchPrices();
+  } else {
+    document.getElementById("countdown").textContent = `Auto Refresh in ${secondsLeft} seconds`;
+  }
+}
+
+document.getElementById("refreshBtn").addEventListener("click", fetchPrices);
+document.getElementById("hubSelect").addEventListener("change", (e) => {
+  state.hub = e.target.value;
+  renderAll();
+});
+document.getElementById("qtyInput").addEventListener("input", (e) => {
+  const v = parseInt(e.target.value, 10);
+  state.qty = Number.isFinite(v) && v > 0 ? v : 1;
+  renderAll();
+});
+document.getElementById("sortDirect").addEventListener("click", () => {
+  sortDirectState.dir = sortDirectState.dir === "desc" ? "asc" : "desc";
+  renderAll();
+});
+document.getElementById("sortChain").addEventListener("click", () => {
+  sortChainState.dir = sortChainState.dir === "desc" ? "asc" : "desc";
+  renderAll();
+});
+
+fetchPrices();
+countdownTimer = setInterval(tickCountdown, 1000);
+</script>
+</body>
+</html>
